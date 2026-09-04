@@ -888,7 +888,8 @@ function CursorStylePreview({
 		style === "windows11"
 	) {
 		const resolvedPreviewSize =
-			(previewSize ?? BUILTIN_CURSOR_PREVIEW_SIZE) * getCursorStyleSizeMultiplier(style);
+			(previewSize ?? BUILTIN_CURSOR_PREVIEW_SIZE) *
+			(style === "windows11" ? 1 : getCursorStyleSizeMultiplier(style));
 		return (
 			<div
 				className="flex items-center justify-center"
@@ -1260,8 +1261,10 @@ export function SettingsPanel({
 			try {
 				const macosPreview = cursorSetAssets.macos.arrow.url;
 				const tahoePreview = cursorSetAssets.tahoe.arrow.url;
-				const windows11Preview = cursorSetAssets.windows11.arrow.url;
-				const minimalPreview = await createTrimmedSvgPreview(minimalCursorUrl, 512);
+				const [windows11Preview, minimalPreview] = await Promise.all([
+					createTrimmedSvgPreview(cursorSetAssets.windows11.arrow.url, 512),
+					createTrimmedSvgPreview(minimalCursorUrl, 512),
+				]);
 				const invertedPreview = await createInvertedPreview(tahoePreview);
 
 				if (!cancelled) {
