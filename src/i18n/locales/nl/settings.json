@@ -23,7 +23,8 @@
 		"mutedState": "Audio is gedempt",
 		"unmutedState": "Audio wordt afgespeeld",
 		"separateClipFromAudio": "Clip van audio scheiden",
-		"delete": "Clip verwijderen"
+		"delete": "Clip verwijderen",
+		"previewSpeedHint": "Voorbeeld max. 16×; exporteren behoudt de gekozen snelheid."
 	},
 	"effects": {
 		"title": "Video-effecten",

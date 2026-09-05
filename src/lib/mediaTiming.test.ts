@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	applyPreviewPlaybackRate,
 	clampMediaTimeToDuration,
+	clampPreviewPlaybackRate,
 	enablePitchPreservingPlayback,
 	estimateCompanionAudioStartDelaySeconds,
 	getEffectiveRecordingDurationMs,
 	getEffectiveVideoStreamDurationSeconds,
 	getMediaSyncPlaybackRate,
+	MAX_PREVIEW_PLAYBACK_RATE,
+	MIN_PREVIEW_PLAYBACK_RATE,
 	resolvePreviewMediaDuration,
 } from "./mediaTiming";
 
@@ -178,5 +182,70 @@ describe("getEffectiveVideoStreamDurationSeconds", () => {
 				streamDuration: 0,
 			}),
 		).toBe(0);
+	});
+});
+
+describe("clampPreviewPlaybackRate", () => {
+	it("clamps rates above Chromium's 16x ceiling", () => {
+		expect(clampPreviewPlaybackRate(30)).toBe(MAX_PREVIEW_PLAYBACK_RATE);
+		expect(clampPreviewPlaybackRate(20)).toBe(MAX_PREVIEW_PLAYBACK_RATE);
+		expect(clampPreviewPlaybackRate(16)).toBe(16);
+	});
+
+	it("clamps tiny rates to the supported minimum", () => {
+		expect(clampPreviewPlaybackRate(0.01)).toBe(MIN_PREVIEW_PLAYBACK_RATE);
+	});
+
+	it("falls back to 1x for non-finite or non-positive rates", () => {
+		expect(clampPreviewPlaybackRate(0)).toBe(1);
+		expect(clampPreviewPlaybackRate(-2)).toBe(1);
+		expect(clampPreviewPlaybackRate(Number.NaN)).toBe(1);
+		expect(clampPreviewPlaybackRate(Number.POSITIVE_INFINITY)).toBe(1);
+	});
+
+	it("passes supported rates through unchanged", () => {
+		expect(clampPreviewPlaybackRate(1)).toBe(1);
+		expect(clampPreviewPlaybackRate(2.5)).toBe(2.5);
+	});
+});
+
+describe("applyPreviewPlaybackRate", () => {
+	it("assigns the clamped rate so a 30x clip never throws in Chromium", () => {
+		const media = { playbackRate: 1 } as unknown as HTMLMediaElement;
+
+		applyPreviewPlaybackRate(media, 30);
+
+		expect(media.playbackRate).toBe(16);
+	});
+
+	it("does not throw when the element rejects the rate entirely", () => {
+		const media = {
+			get playbackRate() {
+				return 1;
+			},
+			set playbackRate(_value: number) {
+				throw new Error("not in the supported playback range");
+			},
+		} as unknown as HTMLMediaElement;
+
+		expect(() => applyPreviewPlaybackRate(media, 30)).not.toThrow();
+	});
+
+	it("skips redundant writes when the clamped rate already matches", () => {
+		let writes = 0;
+		let currentRate = 2;
+		const media = {
+			get playbackRate() {
+				return currentRate;
+			},
+			set playbackRate(value: number) {
+				writes += 1;
+				currentRate = value;
+			},
+		} as unknown as HTMLMediaElement;
+
+		applyPreviewPlaybackRate(media, 2);
+
+		expect(writes).toBe(0);
 	});
 });

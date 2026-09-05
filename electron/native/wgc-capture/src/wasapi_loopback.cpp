@@ -337,11 +337,19 @@ void WasapiCapture::writeSilenceFrames(uint64_t frameCount, WORD channels) {
         return;
     }
 
+    // Cap excessive silence insertion to at most 30 seconds to prevent thread stalling
+    const uint64_t maxSilenceFrames = (mixFormat_ ? mixFormat_->nSamplesPerSec : 48000) * 30ULL;
+    if (frameCount > maxSilenceFrames) {
+        frameCount = maxSilenceFrames;
+    }
+
     gapFillCount_.fetch_add(1);
     insertedSilenceFrames_.fetch_add(frameCount);
-    std::vector<int16_t> silence(static_cast<size_t>(kSilenceWriteChunkFrames * channels), 0);
+
+    constexpr uint64_t kLargeSilenceChunkFrames = 32768;
+    std::vector<int16_t> silence(static_cast<size_t>(kLargeSilenceChunkFrames * channels), 0);
     while (frameCount > 0) {
-        const uint64_t chunkFrames = (std::min)(frameCount, kSilenceWriteChunkFrames);
+        const uint64_t chunkFrames = (std::min)(frameCount, kLargeSilenceChunkFrames);
         writePcmFrames(silence.data(), static_cast<UINT32>(chunkFrames), channels);
         frameCount -= chunkFrames;
     }
@@ -393,6 +401,12 @@ void WasapiCapture::captureThread() {
     DWORD sleepMs = static_cast<DWORD>((static_cast<double>(bufferFrameCount_) / mixFormat_->nSamplesPerSec) * 500.0);
     if (sleepMs < 5) sleepMs = 5;
 
+    // Per-capture-session budget for waiting out a disconnected audio endpoint.
+    // This must not be a function-level static: it would survive across
+    // recordings and leave every later session with an exhausted budget, so a
+    // single device invalidation would immediately drop system audio.
+    int deviceRetryCount = 0;
+
     while (capturing_) {
         if (paused_) {
             Sleep(10);
@@ -405,8 +419,18 @@ void WasapiCapture::captureThread() {
         HRESULT hr = captureClient_->GetNextPacketSize(&packetLength);
         if (FAILED(hr)) {
             std::cerr << "WASAPI: GetNextPacketSize failed hr=0x" << std::hex << hr << std::dec << std::endl;
+            if (hr == AUDCLNT_E_DEVICE_INVALIDATED || hr == AUDCLNT_E_RESOURCES_INVALIDATED) {
+                // Audio endpoint changed or disconnected; wait for device reconnection
+                Sleep(100);
+                if (++deviceRetryCount < 30) {
+                    continue;
+                }
+            }
             break;
         }
+
+        // The endpoint is delivering packets again, so restore the retry budget.
+        deviceRetryCount = 0;
 
         while (packetLength > 0) {
             BYTE* data = nullptr;

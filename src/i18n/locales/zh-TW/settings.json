@@ -23,7 +23,8 @@
 		"mutedState": "音訊已靜音",
 		"unmutedState": "音訊正在播放",
 		"separateClipFromAudio": "將片段與音訊分離",
-		"delete": "刪除片段"
+		"delete": "刪除片段",
+		"previewSpeedHint": "預覽最高 16×，匯出保留所選速度。"
 	},
 	"effects": {
 		"title": "影片效果",

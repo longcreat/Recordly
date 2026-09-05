@@ -40,6 +40,11 @@ electron/native/gpu-export-probe/build/
 electron/native/nvidia-cuda-compositor/build/
 electron/native/bin/*/whisper-*
 electron/native/bin/*/whisper-runtime.json
+# Windows whisper runtime DLLs (SDL2/ggml/whisper) fetched by scripts/build-whisper-runtime.mjs
+electron/native/bin/*/*.dll
+
+# AI agent scratch space
+.agents/
 
 # Local debug helpers
 tmp-*.ps1

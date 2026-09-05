@@ -7,8 +7,10 @@ import { supportsHudCaptureProtection } from "../src/lib/hudCaptureProtection";
 import { USER_DATA_PATH } from "./appPaths";
 import {
 	getHudOverlayWindowBounds,
+	isSameHudOverlayBounds,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
+	type HudOverlayWorkArea,
 } from "./hudOverlayBounds";
 import { getHudOverlayTaskbarOptions } from "./hudOverlayWindowOptions";
 import { getPackagedRendererBaseUrl } from "./rendererServer";
@@ -39,6 +41,11 @@ let hudOverlayWebcamPreviewVisible = false;
 let countdownWindow: BrowserWindow | null = null;
 let updateToastWindow: BrowserWindow | null = null;
 let hudWasVisibleBeforeUpdateToast = false;
+// Last rectangle handed to setBounds() for each overlay. Anything that moves a
+// window behind our back (native drag, restore, display change) must reset the
+// matching entry to null so the next update is not skipped as a no-op.
+let lastAppliedHudOverlayBounds: HudOverlayWorkArea | null = null;
+let lastAppliedUpdateToastBounds: HudOverlayWorkArea | null = null;
 
 const HUD_OVERLAY_SETTINGS_FILE = path.join(USER_DATA_PATH, "hud-overlay-settings.json");
 const HUD_EDGE_MARGIN_DIP = 16;
@@ -116,6 +123,17 @@ function getEditorWindowQuery(): Record<string, string> {
 }
 
 export function isHudOverlayMousePassthroughSupported(): boolean {
+	// Windows and macOS both honour setIgnoreMouseEvents(true, { forward: true })
+	// on a transparent always-on-top overlay: transparent regions stay
+	// click-through for the applications underneath while forwarded pointer
+	// movement still lets the renderer make the visible HUD controls interactive.
+	// Linux compositors (notably Wayland) drop that forwarding, so the HUD falls
+	// back to a constrained, always-interactive window there.
+	//
+	// Do not narrow this to macOS. The non-passthrough fallback keeps a large
+	// opaque-to-mouse rectangle around the toolbar that silently swallows every
+	// click landing in its transparent margins, disables the floating webcam
+	// preview, and re-enables focus stealing in showHudOverlayFromTray().
 	return process.platform !== "linux";
 }
 
@@ -214,11 +232,30 @@ function getHudOverlayBounds() {
 	);
 }
 
+function setHudOverlayWindowBounds(nextBounds: HudOverlayWorkArea) {
+	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed()) {
+		return;
+	}
+
+	if (isSameHudOverlayBounds(lastAppliedHudOverlayBounds, nextBounds)) {
+		return;
+	}
+
+	lastAppliedHudOverlayBounds = nextBounds;
+	hudOverlayWindow.setBounds(nextBounds, false);
+}
+
 function applyHudOverlayBounds() {
 	if (!hudOverlayWindow || hudOverlayWindow.isDestroyed()) {
 		return;
 	}
-	hudOverlayWindow.setBounds(getHudOverlayBounds(), false);
+
+	const nextBounds = getHudOverlayBounds();
+	const boundsChanged = !isSameHudOverlayBounds(lastAppliedHudOverlayBounds, nextBounds);
+	setHudOverlayWindowBounds(nextBounds);
+	if (!boundsChanged) {
+		return;
+	}
 
 	positionUpdateToastWindow();
 	if (!hudOverlayWindow.isVisible()) {
@@ -261,7 +298,13 @@ function positionUpdateToastWindow() {
 		return;
 	}
 
-	updateToastWindow.setBounds(getUpdateToastBounds(), false);
+	const nextBounds = getUpdateToastBounds();
+	if (isSameHudOverlayBounds(lastAppliedUpdateToastBounds, nextBounds)) {
+		return;
+	}
+
+	lastAppliedUpdateToastBounds = nextBounds;
+	updateToastWindow.setBounds(nextBounds, false);
 	updateToastWindow.moveTop();
 }
 
@@ -286,7 +329,12 @@ function setHudOverlayFallbackExpanded(expanded: boolean) {
 		hudOverlayWindow.getBounds(),
 		expanded,
 	);
-	hudOverlayWindow.setBounds(nextBounds, false);
+	const boundsChanged = !isSameHudOverlayBounds(lastAppliedHudOverlayBounds, nextBounds);
+	setHudOverlayWindowBounds(nextBounds);
+	if (!boundsChanged) {
+		return;
+	}
+
 	positionUpdateToastWindow();
 	if (hudOverlayWindow.isVisible()) {
 		hudOverlayWindow.moveTop();
@@ -380,18 +428,16 @@ ipcMain.on("hud-overlay-drag", (_event, phase: string, screenX: number, screenY:
 		const targetY = Math.round(screenY - hudDragOffset.y);
 		const fixedWidth = hudDragFixedSize?.width ?? hudOverlayWindow.getBounds().width;
 		const fixedHeight = hudDragFixedSize?.height ?? hudOverlayWindow.getBounds().height;
-		hudOverlayWindow.setBounds(
-			{
-				x: targetX,
-				y: targetY,
-				width: fixedWidth,
-				height: fixedHeight,
-			},
-			false,
-		);
+		setHudOverlayWindowBounds({
+			x: targetX,
+			y: targetY,
+			width: fixedWidth,
+			height: fixedHeight,
+		});
 	} else if (phase === "end") {
 		const finalBounds = hudOverlayWindow.getBounds();
 		hudUserPosition = { x: finalBounds.x, y: finalBounds.y };
+		lastAppliedHudOverlayBounds = finalBounds;
 
 		hudDragOffset = null;
 		hudDragLastCursor = null;
@@ -450,6 +496,8 @@ export function createHudOverlayWindow(): BrowserWindow {
 	loadHudOverlayCaptureProtectionSetting();
 	hudOverlayFallbackExpanded = false;
 	hudOverlayWebcamPreviewVisible = false;
+	lastAppliedHudOverlayBounds = null;
+	lastAppliedUpdateToastBounds = null;
 	const initialBounds = getHudOverlayBounds();
 	let hasShownHudWindow = false;
 
@@ -590,6 +638,9 @@ export function createHudOverlayWindow(): BrowserWindow {
 			if (win.isDestroyed()) return;
 			const { x, y } = win.getBounds();
 			hudUserPosition = { x, y };
+			// The compositor moved the window itself, so the cached rectangle no
+			// longer describes reality.
+			lastAppliedHudOverlayBounds = null;
 		});
 	}
 
@@ -624,6 +675,7 @@ export function createHudOverlayWindow(): BrowserWindow {
 		screen.removeListener("display-metrics-changed", handleDisplayMetricsChanged);
 		if (hudOverlayWindow === win) {
 			hudOverlayWindow = null;
+			lastAppliedHudOverlayBounds = null;
 		}
 	});
 
@@ -723,10 +775,13 @@ export function createUpdateToastWindow(): BrowserWindow {
 		skipTransformProcessType: process.platform === "darwin",
 	});
 	updateToastWindow = win;
+	// The window is constructed at initialBounds, so record it as applied.
+	lastAppliedUpdateToastBounds = initialBounds;
 
 	win.on("closed", () => {
 		if (updateToastWindow === win) {
 			updateToastWindow = null;
+			lastAppliedUpdateToastBounds = null;
 		}
 		restoreHudAfterUpdateToast();
 	});

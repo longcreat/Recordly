@@ -24,6 +24,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 			width: 2560,
 			height: 1440,
 		},
+		scaleFactor: 1.5,
 	};
 
 	it("uses the requested secondary display bounds for WGC fallback metadata", () => {
@@ -36,6 +37,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 		expect(resolved).toEqual({
 			displayId: secondaryDisplay.id,
 			bounds: secondaryDisplay.bounds,
+			scaleFactor: 1.5,
 		});
 	});
 
@@ -49,6 +51,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 		expect(resolved).toEqual({
 			displayId: primaryDisplay.id,
 			bounds: primaryDisplay.bounds,
+			scaleFactor: 1,
 		});
 	});
 
@@ -62,6 +65,7 @@ describe("resolveWindowsCaptureDisplay", () => {
 		expect(resolved).toEqual({
 			displayId: 303,
 			bounds: primaryDisplay.bounds,
+			scaleFactor: 1,
 		});
 	});
 });
@@ -85,6 +89,7 @@ describe("resolveWindowsCaptureTarget", () => {
 			width: 2560,
 			height: 1440,
 		},
+		scaleFactor: 1.5,
 	};
 
 	it("uses a window handle when a Windows window source is selected", () => {
@@ -123,6 +128,7 @@ describe("resolveWindowsCaptureTarget", () => {
 			kind: "display",
 			displayId: secondaryDisplay.id,
 			bounds: secondaryDisplay.bounds,
+			scaleFactor: 1.5,
 		});
 	});
 });

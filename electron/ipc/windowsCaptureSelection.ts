@@ -14,11 +14,13 @@ export type WindowsCaptureDisplayBounds = {
 export type WindowsCaptureDisplayLike = {
 	id: number;
 	bounds: WindowsCaptureDisplayBounds;
+	scaleFactor?: number;
 };
 
 export type ResolvedWindowsCaptureDisplay = {
 	displayId: number;
 	bounds: WindowsCaptureDisplayBounds;
+	scaleFactor?: number;
 };
 
 export type ResolvedWindowsCaptureTarget =
@@ -30,6 +32,7 @@ export type ResolvedWindowsCaptureTarget =
 			kind: "display";
 			displayId: number;
 			bounds: WindowsCaptureDisplayBounds;
+			scaleFactor?: number;
 	  }
 	| {
 			kind: "invalid-window";
@@ -72,6 +75,7 @@ export function resolveWindowsCaptureDisplay(
 	return {
 		displayId: requestedOrPrimaryDisplayId,
 		bounds: matchedDisplay.bounds,
+		scaleFactor: matchedDisplay.scaleFactor ?? 1,
 	};
 }
 

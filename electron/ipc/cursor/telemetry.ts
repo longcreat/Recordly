@@ -24,6 +24,7 @@ import {
 } from "../state";
 import type { CursorInteractionType, CursorTelemetryPoint, CursorVisualType } from "../types";
 import { getScreen, getTelemetryPathForVideo } from "../utils";
+import { getCachedDisplays, getCachedPrimaryScaleFactor } from "./displayTopology";
 
 export function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
@@ -164,17 +165,50 @@ export function getCursorCaptureElapsedMs(nowMs = Date.now()) {
 	);
 }
 
-export function getNormalizedCursorPoint() {
-	const fallbackCursor = getScreen().getCursorScreenPoint();
+const LINUX_CURSOR_CACHE_TTL_MS = 1000;
+
+function resolveSampledCursorPoint(primaryScaleFactor: number) {
 	const linuxCursorCache = process.platform === "linux" ? linuxCursorScreenPoint : null;
-	const isLinuxCacheFresh = !!linuxCursorCache && Date.now() - linuxCursorCache.updatedAt <= 1000;
+	if (linuxCursorCache && Date.now() - linuxCursorCache.updatedAt <= LINUX_CURSOR_CACHE_TTL_MS) {
+		return {
+			x: linuxCursorCache.x / primaryScaleFactor,
+			y: linuxCursorCache.y / primaryScaleFactor,
+		};
+	}
 
-	const primarySf =
-		process.platform !== "darwin" ? getScreen().getPrimaryDisplay().scaleFactor || 1 : 1;
+	return getScreen().getCursorScreenPoint();
+}
 
-	const cursor = isLinuxCacheFresh
-		? { x: linuxCursorCache.x / primarySf, y: linuxCursorCache.y / primarySf }
-		: fallbackCursor;
+/**
+ * Decide whether a raw hook position can be converted with the primary scale factor.
+ *
+ * libuiohook reports physical pixels, while Electron's global screen coordinates
+ * are DIP laid out per display using that display's own scale factor. Dividing by
+ * the primary factor is only exact while every attached display agrees on it, so
+ * mixed-DPI multi-monitor setups keep the Electron cursor query: it can lag the
+ * button press by a few pixels, but it never lands on the wrong monitor.
+ */
+function canConvertHookPoint(primaryScaleFactor: number): boolean {
+	return getCachedDisplays().every(
+		(display) => (display.scaleFactor || 1) === primaryScaleFactor,
+	);
+}
+
+/**
+ * Convert a screen point into normalized coordinates within the recorded source.
+ *
+ * `hookPoint` is the position the global input hook observed at the instant a
+ * mouse button changed state, in physical pixels. Re-querying the cursor after
+ * the fact drifts by several pixels on a fast flick whenever the main thread is
+ * behind, so callers that have the hardware sample should pass it in.
+ */
+export function getNormalizedCursorPoint(hookPoint?: { x: number; y: number } | null) {
+	const primarySf = process.platform !== "darwin" ? getCachedPrimaryScaleFactor() : 1;
+
+	const cursor =
+		hookPoint && canConvertHookPoint(primarySf)
+			? { x: hookPoint.x / primarySf, y: hookPoint.y / primarySf }
+			: resolveSampledCursorPoint(primarySf);
 
 	const windowBounds = selectedSource?.id?.startsWith("window:") ? selectedWindowBounds : null;
 	if (windowBounds) {
@@ -196,9 +230,7 @@ export function getNormalizedCursorPoint() {
 
 	const sourceDisplayId = Number(selectedSource?.display_id);
 	const sourceDisplay = Number.isFinite(sourceDisplayId)
-		? (getScreen()
-				.getAllDisplays()
-				.find((display) => display.id === sourceDisplayId) ?? null)
+		? (getCachedDisplays().find((display) => display.id === sourceDisplayId) ?? null)
 		: null;
 	const display = sourceDisplay ?? getScreen().getDisplayNearestPoint(cursor);
 	const bounds = display.bounds;

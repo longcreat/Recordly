@@ -5,6 +5,7 @@ import {
 	TranslateIcon,
 	VideoCameraIcon,
 	ArrowClockwiseIcon,
+	ArrowSquareOut,
 	SunIcon,
 	MoonIcon,
 	DesktopIcon,
@@ -37,8 +38,10 @@ export function MorePopover({
 	trigger,
 	supportsHudCaptureProtection,
 	hideHudFromCapture,
+	recordingsDirectory,
 	onToggleHudCaptureProtection,
 	onChooseRecordingsDirectory,
+	onOpenRecordingsFolder,
 	onOpenVideoFile,
 	onOpenProjectBrowser,
 	showDevUpdatePreview,
@@ -48,8 +51,10 @@ export function MorePopover({
 	trigger: ReactElement;
 	supportsHudCaptureProtection: boolean;
 	hideHudFromCapture: boolean;
+	recordingsDirectory?: string | null;
 	onToggleHudCaptureProtection: () => void;
 	onChooseRecordingsDirectory: () => void;
+	onOpenRecordingsFolder?: () => void;
 	onOpenVideoFile: () => void;
 	onOpenProjectBrowser: () => void;
 	showDevUpdatePreview: boolean;
@@ -86,6 +91,25 @@ export function MorePopover({
 						: t("recording.showHudInVideo")}
 				</DropdownItem>
 			)}
+			<div className={styles.ddLabel} style={{ marginTop: 4 }}>
+				{t("recording.storagePath", "存储路径")}
+			</div>
+			{recordingsDirectory && (
+				<div
+					style={{
+						padding: "2px 10px 6px",
+						fontSize: "11px",
+						opacity: 0.65,
+						maxWidth: "240px",
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap",
+					}}
+					title={recordingsDirectory}
+				>
+					{recordingsDirectory}
+				</div>
+			)}
 			<DropdownItem
 				icon={<FolderOpenIcon size={16} />}
 				onClick={() => {
@@ -93,8 +117,19 @@ export function MorePopover({
 					onChooseRecordingsDirectory();
 				}}
 			>
-				{t("recording.recordingsFolder")}
+				{t("recording.changeRecordingsFolder", "更改视频保存路径...")}
 			</DropdownItem>
+			{onOpenRecordingsFolder && (
+				<DropdownItem
+					icon={<ArrowSquareOut size={16} />}
+					onClick={() => {
+						requestClose(POPOVER_ID);
+						onOpenRecordingsFolder();
+					}}
+				>
+					{t("recording.openRecordingsFolder", "打开当前保存文件夹")}
+				</DropdownItem>
+			)}
 			<DropdownItem
 				icon={<VideoCameraIcon size={16} />}
 				onClick={() => {

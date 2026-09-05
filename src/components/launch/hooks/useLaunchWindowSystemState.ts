@@ -103,6 +103,24 @@ export function useLaunchWindowSystemState(
 		};
 	}, []);
 
+	useEffect(() => {
+		let cancelled = false;
+		const loadRecordingsDir = async () => {
+			try {
+				const result = await window.electronAPI.getRecordingsDirectory();
+				if (!cancelled && result.success && result.path) {
+					setRecordingsDirectory(result.path);
+				}
+			} catch (error) {
+				console.error("Failed to load recordings directory:", error);
+			}
+		};
+		void loadRecordingsDir();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	const chooseRecordingsDirectory = useCallback(async () => {
 		try {
 			const result = await window.electronAPI.chooseRecordingsDirectory();
@@ -110,6 +128,14 @@ export function useLaunchWindowSystemState(
 			if (result.success && result.path) setRecordingsDirectory(result.path);
 		} catch (error) {
 			console.error("Failed to choose recordings directory:", error);
+		}
+	}, []);
+
+	const openRecordingsFolder = useCallback(async () => {
+		try {
+			await window.electronAPI.openRecordingsFolder();
+		} catch (error) {
+			console.error("Failed to open recordings folder:", error);
 		}
 	}, []);
 
@@ -137,6 +163,7 @@ export function useLaunchWindowSystemState(
 		hideHudFromCapture,
 		setHideHudFromCapture,
 		chooseRecordingsDirectory,
+		openRecordingsFolder,
 		toggleHudCaptureProtection,
 	};
 }

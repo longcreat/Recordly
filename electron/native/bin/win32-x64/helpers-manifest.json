@@ -1,35 +1,42 @@
 {
-	"version": 1,
-	"platform": "win32",
-	"arch": "x64",
-	"helpers": {
-		"wgc-capture": {
-			"binaryName": "wgc-capture.exe",
-			"binarySha256": "4d89fdff8e3343998c7a3b4d75d964c1f75f93594aa097c6681e477d25ec9f01",
-			"sourceDir": "electron/native/wgc-capture",
-			"sourceFingerprint": "c6dac250c9d16f7aa881998353441b4ae3fb59731b802e3b8491a136e79726b0",
-			"updatedAt": "2026-07-11T11:58:45.856Z"
-		},
-		"cursor-monitor": {
-			"binaryName": "cursor-monitor.exe",
-			"binarySha256": "f1d8f30e8d7bee19ecea91c9a90a95ea4824138b8336b18030fa0602a641d70d",
-			"sourceDir": "electron/native/cursor-monitor",
-			"sourceFingerprint": "45bb72e4039e061a354af87317d7c42ec3d2118369b3f4379046ff497b701e72",
-			"updatedAt": "2026-07-11T11:58:56.534Z"
-		},
-		"recordly-gpu-export": {
-			"binaryName": "recordly-gpu-export.exe",
-			"binarySha256": "49a2ac588206305d0129e6263ce4be49780c50a9dc4efc7df63aad09178a919f",
-			"sourceDir": "electron/native/gpu-export-probe",
-			"sourceFingerprint": "37a5842eba63cdeccfddd02cc278a98207248fb0aa6b56153fb85ed152c908c1",
-			"updatedAt": "2026-07-11T11:58:51.659Z"
-		},
-		"recordly-nvidia-cuda-compositor": {
-			"binaryName": "recordly-nvidia-cuda-compositor.exe",
-			"binarySha256": "250a3f8cac7c6ea38a873434d23d4b2be7d6555e42cc0b405aa26f774169159c",
-			"sourceDir": "electron/native/nvidia-cuda-compositor",
-			"sourceFingerprint": "de1219228ce326e96d1f4815a3763b10d5f235cc1286bc6542c99707a85d5947",
-			"updatedAt": "2026-05-27T11:29:32.957Z"
-		}
-	}
+  "version": 1,
+  "platform": "win32",
+  "arch": "x64",
+  "helpers": {
+    "wgc-capture": {
+      "binaryName": "wgc-capture.exe",
+      "binarySha256": "4d89fdff8e3343998c7a3b4d75d964c1f75f93594aa097c6681e477d25ec9f01",
+      "sourceDir": "electron/native/wgc-capture",
+      "sourceFingerprint": "8db26675d1932da96e05afea8b4432c8b94824b82d1d3c19ab73664ea806b6d7",
+      "updatedAt": "2026-09-05T09:38:24.880Z"
+    },
+    "cursor-monitor": {
+      "binaryName": "cursor-monitor.exe",
+      "binarySha256": "f1d8f30e8d7bee19ecea91c9a90a95ea4824138b8336b18030fa0602a641d70d",
+      "sourceDir": "electron/native/cursor-monitor",
+      "sourceFingerprint": "5e943f2876d3ea843ada8ca8c6595672dbc1cd8e4e90aabf8c00cb804f47f8f4",
+      "updatedAt": "2026-09-05T09:37:57.947Z"
+    },
+    "recordly-gpu-export": {
+      "binaryName": "recordly-gpu-export.exe",
+      "binarySha256": "49a2ac588206305d0129e6263ce4be49780c50a9dc4efc7df63aad09178a919f",
+      "sourceDir": "electron/native/gpu-export-probe",
+      "sourceFingerprint": "c85db1e33912d548ffe34a55b8a6db9d6eb5a972f1eb53b1c8a7d008b30684ba",
+      "updatedAt": "2026-09-05T09:37:57.959Z"
+    },
+    "recordly-nvidia-cuda-compositor": {
+      "binaryName": "recordly-nvidia-cuda-compositor.exe",
+      "binarySha256": "250a3f8cac7c6ea38a873434d23d4b2be7d6555e42cc0b405aa26f774169159c",
+      "sourceDir": "electron/native/nvidia-cuda-compositor",
+      "sourceFingerprint": "5db7ead9459bba517021a07b98a578566cba089f2a81a96736be6dc2029d1a7f",
+      "updatedAt": "2026-09-05T09:39:20.288Z"
+    },
+    "window-bounds": {
+      "binaryName": "window-bounds.exe",
+      "binarySha256": "385a560fdac21581f3bdc92b011e009dafe6d8e21e3ab8bf1f51c6cf35c04e10",
+      "sourceDir": "electron/native/window-bounds",
+      "sourceFingerprint": "95fc80504dcdf16b560445291e666a5d247fe92ab7eb6c67d6a8c916aa68aa5a",
+      "updatedAt": "2026-09-05T15:50:50.665Z"
+    }
+  }
 }

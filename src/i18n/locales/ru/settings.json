@@ -23,7 +23,8 @@
 		"mutedState": "Звук выключен",
 		"unmutedState": "Звук включен",
 		"separateClipFromAudio": "Отделить аудио от клипа",
-		"delete": "Удалить клип"
+		"delete": "Удалить клип",
+		"previewSpeedHint": "Предпросмотр до 16×; экспорт сохраняет выбранную скорость."
 	},
 	"effects": {
 		"title": "Эффекты",

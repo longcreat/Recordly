@@ -481,26 +481,35 @@ export function registerRecordingHandlers(
 					if (captureTarget.kind === "window") {
 						config.windowHandle = captureTarget.windowHandle;
 					} else {
-						// Windows Graphics Capture (WGC) requires a raw HMONITOR handle.
-						// We attempt to resolve the handle by matching the physical coordinates of the target display.
+						// Windows Graphics Capture (WGC) requires a raw HMONITOR handle and physical coordinates.
 						const monitors = getMonitorHandles();
+						const scale = captureTarget.scaleFactor ?? 1;
+						const physX = Math.round(captureTarget.bounds.x * scale);
+						const physY = Math.round(captureTarget.bounds.y * scale);
+						const physW = Math.round(captureTarget.bounds.width * scale);
+						const physH = Math.round(captureTarget.bounds.height * scale);
+
 						const matchedMonitor = monitors.find(
 							(monitor) =>
-								monitor.x === Math.round(captureTarget.bounds.x) &&
-								monitor.y === Math.round(captureTarget.bounds.y),
+								(monitor.x === Math.round(captureTarget.bounds.x) &&
+								 monitor.y === Math.round(captureTarget.bounds.y)) ||
+								(monitor.x === physX && monitor.y === physY) ||
+								(Math.abs(monitor.x - physX) <= 4 && Math.abs(monitor.y - physY) <= 4),
 						);
 
 						if (matchedMonitor) {
 							config.displayId = matchedMonitor.handle;
+							config.displayX = matchedMonitor.x;
+							config.displayY = matchedMonitor.y;
+							config.displayW = matchedMonitor.width;
+							config.displayH = matchedMonitor.height;
 						} else {
-							// Fallback to coordinate-based matching if handle resolution fails
 							config.displayId = captureTarget.displayId;
+							config.displayX = physX;
+							config.displayY = physY;
+							config.displayW = physW;
+							config.displayH = physH;
 						}
-
-						config.displayX = Math.round(captureTarget.bounds.x);
-						config.displayY = Math.round(captureTarget.bounds.y);
-						config.displayW = Math.round(captureTarget.bounds.width);
-						config.displayH = Math.round(captureTarget.bounds.height);
 					}
 
 					if (options?.capturesSystemAudio) {

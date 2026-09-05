@@ -298,12 +298,35 @@ bool MFEncoder::extendLastFrameToLocked(int64_t timestampHns) {
     }
 
     int64_t nextSampleTimeHns = lastSampleTimeHns_ + frameDurationHns;
-    while (nextSampleTimeHns + frameDurationHns <= timestampHns) {
+    const int64_t gapDurationHns = timestampHns - nextSampleTimeHns;
+
+    // For short gaps (<= 3 frames), write consecutive duplicate frames.
+    // For large static periods, do NOT allocate and send thousands of identical frames
+    // synchronously, which crashes the hardware encoder queue and exhausts system RAM.
+    // Instead, bridge the timeline with a leading sample and a trailing sample.
+    if (gapDurationHns <= 3 * frameDurationHns) {
+        while (nextSampleTimeHns + frameDurationHns <= timestampHns) {
+            if (!writeNv12SampleLocked(lastFrameBuffer_, nextSampleTimeHns)) {
+                return false;
+            }
+            lastSampleTimeHns_ = nextSampleTimeHns;
+            nextSampleTimeHns += frameDurationHns;
+        }
+    } else {
+        // Leading sample to maintain cadence
         if (!writeNv12SampleLocked(lastFrameBuffer_, nextSampleTimeHns)) {
             return false;
         }
         lastSampleTimeHns_ = nextSampleTimeHns;
-        nextSampleTimeHns += frameDurationHns;
+
+        // Trailing bridge sample right before target timestamp
+        int64_t trailingSampleTimeHns = timestampHns - frameDurationHns;
+        if (trailingSampleTimeHns > lastSampleTimeHns_) {
+            if (!writeNv12SampleLocked(lastFrameBuffer_, trailingSampleTimeHns)) {
+                return false;
+            }
+            lastSampleTimeHns_ = trailingSampleTimeHns;
+        }
     }
 
     return true;

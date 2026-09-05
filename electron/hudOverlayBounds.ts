@@ -13,6 +13,27 @@ function clamp(value: number, min: number, max: number): number {
 	return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Compare a previously applied overlay rectangle with the next requested one.
+ *
+ * Hover-driven IPC arrives at pointer-event rate. Re-applying identical bounds
+ * still forces the compositor to recompose the layered overlay and reassert its
+ * Z-order, which surfaces as dropped frames while the pointer travels over the
+ * HUD, so callers use this to short-circuit no-op updates.
+ */
+export function isSameHudOverlayBounds(
+	applied: HudOverlayWorkArea | null | undefined,
+	next: HudOverlayWorkArea,
+): boolean {
+	return (
+		!!applied &&
+		applied.x === next.x &&
+		applied.y === next.y &&
+		applied.width === next.width &&
+		applied.height === next.height
+	);
+}
+
 export function getHudOverlayWindowBounds(
 	workArea: HudOverlayWorkArea,
 	mousePassthroughSupported: boolean,

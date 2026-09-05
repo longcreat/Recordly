@@ -128,6 +128,41 @@ export function enablePitchPreservingPlayback(media: HTMLMediaElement) {
 	pitchMedia.webkitPreservesPitch = true;
 }
 
+// Chromium rejects any playbackRate outside [0.0625, 16] by throwing a
+// DOMException instead of clamping it. Clip speeds above that ceiling (20x/30x)
+// would otherwise abort the caller's requestVideoFrameCallback loop and leave the
+// element stuck at 1x, so the preview plays the clip in real time. Preview
+// therefore clamps to the supported range; export is unaffected because it
+// re-times via frame sampling rather than playbackRate.
+export const MIN_PREVIEW_PLAYBACK_RATE = 0.0625;
+export const MAX_PREVIEW_PLAYBACK_RATE = 16;
+
+export function clampPreviewPlaybackRate(rate: number): number {
+	if (!Number.isFinite(rate) || rate <= 0) {
+		return 1;
+	}
+
+	return Math.min(MAX_PREVIEW_PLAYBACK_RATE, Math.max(MIN_PREVIEW_PLAYBACK_RATE, rate));
+}
+
+export function applyPreviewPlaybackRate(media: HTMLMediaElement, rate: number): void {
+	const clampedRate = clampPreviewPlaybackRate(rate);
+	if (Math.abs(media.playbackRate - clampedRate) <= 0.001) {
+		return;
+	}
+
+	try {
+		media.playbackRate = clampedRate;
+	} catch {
+		// Defensive: a rejected rate must never abort the surrounding frame loop.
+		try {
+			media.playbackRate = 1;
+		} catch {
+			// Element is not ready for rate changes yet; retry on the next frame.
+		}
+	}
+}
+
 export function getEffectiveVideoStreamDurationSeconds({
 	duration,
 	streamDuration,

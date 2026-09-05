@@ -141,12 +141,20 @@ export type HookMouseEvent = {
 
 export type HookEventListener = (event: HookMouseEvent) => void;
 
+/** An event as delivered by the native addon, before it is re-emitted by name. */
+export type HookRawEvent = HookMouseEvent & { type?: number };
+
 export type UiohookLike = {
 	on: (eventName: HookEventName, listener: HookEventListener) => void;
 	off?: (eventName: HookEventName, listener: HookEventListener) => void;
 	removeListener?: (eventName: HookEventName, listener: HookEventListener) => void;
 	start: () => void;
 	stop?: () => void;
+	/**
+	 * Native dispatch entry point. `start()` binds whatever this property holds,
+	 * so replacing it filters events before they reach the EventEmitter.
+	 */
+	handler?: (event: HookRawEvent) => void;
 };
 
 export type UiohookModuleNamespace = {

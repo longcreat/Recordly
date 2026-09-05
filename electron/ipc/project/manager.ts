@@ -16,6 +16,7 @@ import {
 import {
 	approvedLocalReadPaths,
 	currentProjectPath,
+	customRecordingsDir,
 	setCurrentProjectPath,
 	setCurrentRecordingSession,
 	setCurrentVideoPath,
@@ -24,6 +25,7 @@ import {
 } from "../state";
 import type { ProjectLibraryEntry, RecordingSessionData } from "../types";
 import {
+	approveUserPath,
 	getRecordingsDir,
 	normalizePath,
 	normalizeVideoSourcePath,
@@ -43,10 +45,33 @@ export function getAssetRootPath() {
 export function isPathInsideDirectory(candidatePath: string, directoryPath: string) {
 	const normalizedCandidatePath = normalizePath(candidatePath);
 	const normalizedDirectoryPath = normalizePath(directoryPath);
+	if (process.platform === "win32") {
+		const lowerCandidate = normalizedCandidatePath.toLowerCase();
+		const lowerDirectory = normalizedDirectoryPath.toLowerCase();
+		return (
+			lowerCandidate === lowerDirectory ||
+			lowerCandidate.startsWith(`${lowerDirectory}${path.sep}`)
+		);
+	}
 	return (
 		normalizedCandidatePath === normalizedDirectoryPath ||
 		normalizedCandidatePath.startsWith(`${normalizedDirectoryPath}${path.sep}`)
 	);
+}
+
+function hasApprovedPath(targetPath: string): boolean {
+	if (approvedLocalReadPaths.has(targetPath)) {
+		return true;
+	}
+	if (process.platform === "win32") {
+		const lowerTarget = targetPath.toLowerCase();
+		for (const approved of approvedLocalReadPaths) {
+			if (approved.toLowerCase() === lowerTarget) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 export function isAllowedLocalReadPath(candidatePath: string) {
@@ -56,6 +81,9 @@ export function isAllowedLocalReadPath(candidatePath: string) {
 		getAssetRootPath(),
 		app.getPath("temp"),
 	];
+	if (customRecordingsDir) {
+		allowedPrefixes.push(customRecordingsDir);
+	}
 	const normalizedCandidatePath = normalizePath(candidatePath);
 
 	// Canonicalize so a symlink placed under an allowed prefix can't smuggle in a
@@ -72,14 +100,10 @@ export function isAllowedLocalReadPath(candidatePath: string) {
 
 	// Security: only allow paths under app-managed directories or paths the user
 	// has explicitly opted into (recording session sources, files chosen via
-	// dialog, app-produced exports). The lexical path must satisfy the policy
-	// AND the canonical (real) path must satisfy it too, so a symlink under an
-	// allowed prefix that points outside the allowlist is rejected. Previously
-	// this returned true for any existing file, which made the allowlist a no-op
-	// for read-local-file and the local media URL handler.
+	// dialog, app-produced exports).
 	const lexicalAllowed =
 		allowedPrefixes.some((prefix) => isPathInsideDirectory(normalizedCandidatePath, prefix)) ||
-		approvedLocalReadPaths.has(normalizedCandidatePath);
+		hasApprovedPath(normalizedCandidatePath);
 	if (!lexicalAllowed) {
 		return false;
 	}
@@ -90,7 +114,7 @@ export function isAllowedLocalReadPath(candidatePath: string) {
 
 	return (
 		allowedPrefixes.some((prefix) => isPathInsideDirectory(canonicalCandidatePath, prefix)) ||
-		approvedLocalReadPaths.has(canonicalCandidatePath)
+		hasApprovedPath(canonicalCandidatePath)
 	);
 }
 
@@ -245,11 +269,30 @@ export async function getProjectsDir() {
 }
 
 export async function persistRecordingsDirectorySetting(nextDir: string) {
-	setCustomRecordingsDir(path.resolve(nextDir));
+	const resolvedDir = path.resolve(nextDir);
+	setCustomRecordingsDir(resolvedDir);
 	setRecordingsDirLoaded(true);
+	approveUserPath(resolvedDir);
+	approveUserPath(path.join(resolvedDir, PROJECTS_DIRECTORY_NAME));
+
+	let existingSettings: Record<string, unknown> = {};
+	try {
+		if (existsSync(RECORDINGS_SETTINGS_FILE)) {
+			const content = await fs.readFile(RECORDINGS_SETTINGS_FILE, "utf-8");
+			existingSettings = parseJsonWithByteOrderMark(content) ?? {};
+		}
+	} catch (err) {
+		console.warn("Failed to read existing recordings settings, will overwrite:", err);
+	}
+
+	const updated = {
+		...existingSettings,
+		recordingsDir: resolvedDir,
+	};
+
 	await fs.writeFile(
 		RECORDINGS_SETTINGS_FILE,
-		JSON.stringify({ recordingsDir: path.resolve(nextDir) }, null, 2),
+		JSON.stringify(updated, null, 2),
 		"utf-8",
 	);
 }

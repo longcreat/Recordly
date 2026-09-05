@@ -43,6 +43,7 @@ HMONITOR findMonitorByDisplayId(int64_t displayId) {
 HMONITOR findMonitorByBounds(int x, int y, int width, int height) {
     auto monitors = enumerateMonitors();
 
+    // 1. Exact match
     for (const auto& m : monitors) {
         if (m.x == x && m.y == y && m.width == width && m.height == height) {
             std::cerr << "Found monitor by exact bounds: " << x << "," << y << " " << width << "x" << height << std::endl;
@@ -50,18 +51,35 @@ HMONITOR findMonitorByBounds(int x, int y, int width, int height) {
         }
     }
 
+    // 2. Tolerance bounds match (within 6px for rounding differences)
     for (const auto& m : monitors) {
-        if (m.x == x && m.y == y) {
+        if (std::abs(m.x - x) <= 6 && std::abs(m.y - y) <= 6 &&
+            std::abs(m.width - width) <= 6 && std::abs(m.height - height) <= 6) {
+            std::cerr << "Found monitor by tolerance bounds match: " << m.x << "," << m.y << " " << m.width << "x" << m.height << std::endl;
+            return m.handle;
+        }
+    }
+
+    // 3. Top-left point match (within 6px)
+    for (const auto& m : monitors) {
+        if (std::abs(m.x - x) <= 6 && std::abs(m.y - y) <= 6) {
             std::cerr << "Found monitor by top-left point match: " << x << "," << y << std::endl;
             return m.handle;
         }
     }
 
+    // 4. OS MonitorFromRect fallback
     RECT rect = { x, y, x + width, y + height };
     HMONITOR monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONULL);
     if (monitor) {
         std::cerr << "Found monitor via Windows OS MonitorFromRect fallback" << std::endl;
         return monitor;
+    }
+
+    // 5. Fallback to primary / single monitor if only one monitor exists
+    if (monitors.size() == 1) {
+        std::cerr << "Falling back to sole available monitor" << std::endl;
+        return monitors[0].handle;
     }
 
     return nullptr;

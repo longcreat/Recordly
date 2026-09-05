@@ -560,9 +560,10 @@ function createTray() {
 }
 
 function shouldUseTray() {
-	// macOS and Windows expose Recordly through their Dock/taskbar. Keep the
-	// tray entry only on Linux, where it remains the primary app entry point.
-	return process.platform === "linux";
+	// macOS exposes Recordly through its Dock/menu bar. Keep the
+	// tray entry on Windows and Linux so users have a persistent, visible
+	// access point and can control/exit the app even when main windows are closed.
+	return process.platform === "win32" || process.platform === "linux";
 }
 
 function getPublicAssetPath(filename: string) {

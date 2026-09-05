@@ -23,7 +23,8 @@
 		"mutedState": "El audio está silenciado",
 		"unmutedState": "El audio se está reproduciendo",
 		"separateClipFromAudio": "Separar clip del audio",
-		"delete": "Eliminar clip"
+		"delete": "Eliminar clip",
+		"previewSpeedHint": "La vista previa llega hasta 16×; la exportación mantiene la velocidad elegida."
 	},
 	"effects": {
 		"title": "Efectos de video",

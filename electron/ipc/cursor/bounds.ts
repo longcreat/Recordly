@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 import type { NativeMacWindowSource, WindowBounds, SelectedSource } from "../types";
 import {
@@ -14,7 +15,10 @@ import {
 	setCachedNativeMacWindowSourcesAtMs,
 } from "../state";
 import { parseWindowId } from "../utils";
-import { ensureNativeWindowListBinary } from "../paths/binaries";
+import {
+	ensureNativeWindowListBinary,
+	getWindowsWindowBoundsBinaryPath,
+} from "../paths/binaries";
 
 const execFileAsync = promisify(execFile);
 
@@ -166,53 +170,54 @@ export async function resolveWindowsWindowBounds(
 		return null;
 	}
 
-	const script = [
+	const binaryPath = getWindowsWindowBoundsBinaryPath();
+	if (existsSync(binaryPath)) {
+		try {
+			const { stdout } = await execFileAsync(
+				binaryPath,
+				[String(windowId ?? ""), windowTitle],
+				{ timeout: 800 },
+			);
+			const trimmed = stdout.trim();
+			if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+				const bounds = JSON.parse(trimmed) as WindowBounds;
+				return bounds && bounds.width > 0 && bounds.height > 0 ? bounds : null;
+			}
+		} catch {
+			return null;
+		}
+	}
+
+	// Fallback to lightweight process-based lookup without C# compilation
+	const fallbackScript = [
 		"param([string]$windowId, [string]$windowTitle)",
-		'Add-Type -TypeDefinition @"',
-		"using System;",
-		"using System.Runtime.InteropServices;",
-		"public static class RecordlyWindowBounds {",
-		"  [StructLayout(LayoutKind.Sequential)]",
-		"  public struct RECT {",
-		"    public int Left;",
-		"    public int Top;",
-		"    public int Right;",
-		"    public int Bottom;",
-		"  }",
-		'  [DllImport("user32.dll")]',
-		"  [return: MarshalAs(UnmanagedType.Bool)]",
-		"  public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);",
-		"}",
-		'"@',
 		"$handle = [Int64]0",
-		"if ($windowId) {",
-		"  $handle = [Int64]$windowId",
-		"}",
-		"$escapedWindowTitle = if ($windowTitle) { [WildcardPattern]::Escape($windowTitle) } else { $null }",
+		"if ($windowId) { [Int64]::TryParse($windowId.Split(':')[0], [ref]$handle) | Out-Null }",
 		"if ($handle -le 0 -and $windowTitle) {",
-		'  $matchingProcess = Get-Process | Where-Object { $_.MainWindowTitle -eq $windowTitle -or ($escapedWindowTitle -and $_.MainWindowTitle -like "*$escapedWindowTitle*") } | Select-Object -First 1',
-		"  if ($matchingProcess) {",
-		"    $handle = $matchingProcess.MainWindowHandle.ToInt64()",
+		"  $p = Get-Process | Where-Object { $_.MainWindowTitle -eq $windowTitle } | Select-Object -First 1",
+		"  if ($p) { $handle = $p.MainWindowHandle.ToInt64() }",
+		"}",
+		"if ($handle -gt 0) {",
+		"  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class WRec { [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, R, B; } [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr h, out R r); }' -ErrorAction SilentlyContinue",
+		"  $r = New-Object WRec+R",
+		"  if ([WRec]::GetWindowRect([IntPtr]$handle, [ref]$r)) {",
+		"    @{ x = $r.L; y = $r.T; width = $r.R - $r.L; height = $r.B - $r.T } | ConvertTo-Json -Compress",
 		"  }",
 		"}",
-		"if ($handle -le 0) {",
-		"  exit 1",
-		"}",
-		"$rect = New-Object RecordlyWindowBounds+RECT",
-		"if (-not [RecordlyWindowBounds]::GetWindowRect([IntPtr]$handle, [ref]$rect)) {",
-		"  exit 1",
-		"}",
-		"@{ x = $rect.Left; y = $rect.Top; width = $rect.Right - $rect.Left; height = $rect.Bottom - $rect.Top } | ConvertTo-Json -Compress",
 	].join("\n");
 
 	try {
 		const { stdout } = await execFileAsync(
 			"powershell.exe",
-			["-NoProfile", "-Command", script, String(windowId ?? ""), windowTitle],
+			["-NoProfile", "-NonInteractive", "-Command", fallbackScript, String(windowId ?? ""), windowTitle],
 			{ timeout: 1500 },
 		);
-		const bounds = JSON.parse(stdout) as WindowBounds;
-		return bounds && bounds.width > 0 && bounds.height > 0 ? bounds : null;
+		const trimmed = stdout.trim();
+		if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+			const bounds = JSON.parse(trimmed) as WindowBounds;
+			return bounds && bounds.width > 0 && bounds.height > 0 ? bounds : null;
+		}
+		return null;
 	} catch {
 		return null;
 	}
@@ -233,23 +238,35 @@ export function stopWindowBoundsCapture() {
 	setSelectedWindowBounds(null);
 }
 
+let isRefreshingWindowBounds = false;
+
 async function refreshSelectedWindowBounds() {
+	if (isRefreshingWindowBounds) {
+		return;
+	}
 	if (!selectedSource?.id?.startsWith("window:")) {
 		setSelectedWindowBounds(null);
 		return;
 	}
 
-	let bounds: WindowBounds | null = null;
+	isRefreshingWindowBounds = true;
+	try {
+		let bounds: WindowBounds | null = null;
 
-	if (process.platform === "darwin") {
-		bounds = await resolveMacWindowBounds(selectedSource);
-	} else if (process.platform === "win32") {
-		bounds = await resolveWindowsWindowBounds(selectedSource);
-	} else if (process.platform === "linux") {
-		bounds = await resolveLinuxWindowBounds(selectedSource);
+		if (process.platform === "darwin") {
+			bounds = await resolveMacWindowBounds(selectedSource);
+		} else if (process.platform === "win32") {
+			bounds = await resolveWindowsWindowBounds(selectedSource);
+		} else if (process.platform === "linux") {
+			bounds = await resolveLinuxWindowBounds(selectedSource);
+		}
+
+		setSelectedWindowBounds(bounds);
+	} catch {
+		// Suppress unexpected query exceptions
+	} finally {
+		isRefreshingWindowBounds = false;
 	}
-
-	setSelectedWindowBounds(bounds);
 }
 
 export function startWindowBoundsCapture() {

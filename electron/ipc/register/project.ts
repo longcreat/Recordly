@@ -23,6 +23,7 @@ import {
 	saveProjectThumbnail,
 	saveRecentProjectPaths,
 } from "../project/manager";
+import { migrateRecordingsDirectory } from "../project/migration";
 import { persistRecordingSessionManifest, resolveRecordingSession } from "../project/session";
 import {
 	currentProjectPath,
@@ -290,14 +291,34 @@ export function registerProjectHandlers() {
 			}
 
 			const selectedPath = path.resolve(result.filePaths[0]);
+			if (selectedPath.toLowerCase() === current.toLowerCase()) {
+				return {
+					success: true,
+					path: selectedPath,
+					isDefault: selectedPath === RECORDINGS_DIR,
+				};
+			}
+
 			await fs.mkdir(selectedPath, { recursive: true });
 			await fs.access(selectedPath, fsConstants.W_OK);
+
+			const migrationResult = await migrateRecordingsDirectory(current, selectedPath);
 			await persistRecordingsDirectorySetting(selectedPath);
+
+			for (const win of BrowserWindow.getAllWindows()) {
+				if (!win.isDestroyed()) {
+					win.webContents.send("recordings-directory-changed", {
+						path: selectedPath,
+						isDefault: selectedPath === RECORDINGS_DIR,
+					});
+				}
+			}
 
 			return {
 				success: true,
 				path: selectedPath,
 				isDefault: selectedPath === RECORDINGS_DIR,
+				migrationResult,
 			};
 		} catch (error) {
 			return {

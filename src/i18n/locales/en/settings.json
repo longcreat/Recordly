@@ -29,7 +29,8 @@
 		"mutedState": "Audio is muted",
 		"unmutedState": "Audio is playing",
 		"separateClipFromAudio": "Separate clip from audio",
-		"delete": "Delete Clip"
+		"delete": "Delete Clip",
+		"previewSpeedHint": "Preview caps at 16×; export keeps the selected speed."
 	},
 	"effects": {
 		"title": "Video Effects",

@@ -124,7 +124,11 @@ export function getMacPrivacySettingsUrl(pane: "screen" | "accessibility" | "mic
 export function approveUserPath(filePath: string | null | undefined): void {
 	if (!filePath) return;
 	try {
-		approvedLocalReadPaths.add(path.resolve(filePath));
+		const resolved = path.resolve(filePath);
+		approvedLocalReadPaths.add(resolved);
+		if (process.platform === "win32") {
+			approvedLocalReadPaths.add(resolved.toLowerCase());
+		}
 	} catch {
 		// Ignore invalid paths; later reads will surface the underlying error.
 	}

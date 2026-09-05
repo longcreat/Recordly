@@ -2,9 +2,30 @@ import { describe, expect, it } from "vitest";
 
 import {
 	getHudOverlayWindowBounds,
+	isSameHudOverlayBounds,
 	resizeHudOverlayFallbackBounds,
 	shouldExpandHudOverlayFallback,
 } from "./hudOverlayBounds";
+
+describe("isSameHudOverlayBounds", () => {
+	const applied = { x: 650, y: 920, width: 860, height: 160 };
+
+	it("treats an identical rectangle as a no-op update", () => {
+		expect(isSameHudOverlayBounds(applied, { ...applied })).toBe(true);
+	});
+
+	it("reports a change for every differing edge", () => {
+		expect(isSameHudOverlayBounds(applied, { ...applied, x: 651 })).toBe(false);
+		expect(isSameHudOverlayBounds(applied, { ...applied, y: 921 })).toBe(false);
+		expect(isSameHudOverlayBounds(applied, { ...applied, width: 861 })).toBe(false);
+		expect(isSameHudOverlayBounds(applied, { ...applied, height: 540 })).toBe(false);
+	});
+
+	it("never short-circuits the first update after the cache was reset", () => {
+		expect(isSameHudOverlayBounds(null, applied)).toBe(false);
+		expect(isSameHudOverlayBounds(undefined, applied)).toBe(false);
+	});
+});
 
 describe("getHudOverlayWindowBounds", () => {
 	const workArea = {

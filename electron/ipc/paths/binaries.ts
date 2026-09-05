@@ -125,6 +125,10 @@ export function getCursorMonitorExePath(): string {
 	return resolvePreferredWindowsNativeHelperPath("cursor-monitor", "cursor-monitor.exe");
 }
 
+export function getWindowsWindowBoundsBinaryPath(): string {
+	return resolvePreferredWindowsNativeHelperPath("window-bounds", "window-bounds.exe");
+}
+
 async function migrateLegacyNativeHelperBinaries(): Promise<void> {
 	const legacyToCurrentPaths: Array<[string, string]> = [
 		[

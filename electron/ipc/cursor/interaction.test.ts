@@ -11,8 +11,11 @@ vi.mock("electron", () => ({
 	},
 }));
 
+import type { UiohookLike } from "../types";
 import {
+	installHookMouseMoveFilter,
 	repairBundledUiohookBinaryForCurrentArch,
+	shouldForwardHookEvent,
 	shouldStartGlobalInteractionHook,
 } from "./interaction";
 
@@ -24,6 +27,108 @@ describe("shouldStartGlobalInteractionHook", () => {
 	it("keeps global interaction capture enabled on Windows and Linux", () => {
 		expect(shouldStartGlobalInteractionHook("win32")).toBe(true);
 		expect(shouldStartGlobalInteractionHook("linux")).toBe(true);
+	});
+});
+
+// libuiohook event_type values, matching uiohook-napi's exported EventType enum.
+const EVENT_MOUSE_PRESSED = 7;
+const EVENT_MOUSE_RELEASED = 8;
+const EVENT_MOUSE_MOVED = 9;
+const EVENT_MOUSE_WHEEL = 11;
+
+describe("shouldForwardHookEvent", () => {
+	it("drops pointer movement only when the platform does not consume it", () => {
+		expect(shouldForwardHookEvent(EVENT_MOUSE_MOVED, { forwardMouseMove: false })).toBe(false);
+		expect(shouldForwardHookEvent(EVENT_MOUSE_MOVED, { forwardMouseMove: true })).toBe(true);
+	});
+
+	it("always forwards the click events cursor telemetry is built on", () => {
+		for (const eventType of [EVENT_MOUSE_PRESSED, EVENT_MOUSE_RELEASED, EVENT_MOUSE_WHEEL]) {
+			expect(shouldForwardHookEvent(eventType, { forwardMouseMove: false })).toBe(true);
+		}
+	});
+
+	it("forwards unrecognised event types instead of silently dropping them", () => {
+		expect(shouldForwardHookEvent(undefined, { forwardMouseMove: false })).toBe(true);
+		expect(shouldForwardHookEvent("mousedown", { forwardMouseMove: false })).toBe(true);
+		expect(shouldForwardHookEvent(Number.NaN, { forwardMouseMove: false })).toBe(true);
+	});
+});
+
+describe("installHookMouseMoveFilter", () => {
+	/**
+	 * Mirrors uiohook-napi's UiohookNapi: `handler` is a prototype method and
+	 * `start()` binds whatever `this.handler` resolves to, so an own property
+	 * installed beforehand becomes the native dispatch entry point.
+	 */
+	class FakeHook {
+		dispatched: Array<{ type: number }> = [];
+		boundHandler: ((event: { type: number }) => void) | null = null;
+
+		on = vi.fn();
+
+		handler(event: { type: number }) {
+			this.dispatched.push(event);
+		}
+
+		start() {
+			this.boundHandler = this.handler.bind(this);
+		}
+	}
+
+	function startAndDeliver(hook: FakeHook, eventTypes: number[]) {
+		hook.start();
+		expect(hook.boundHandler).not.toBeNull();
+		for (const type of eventTypes) {
+			hook.boundHandler?.({ type });
+		}
+		return hook.dispatched.map((event) => event.type);
+	}
+
+	it("stops mousemove before it reaches listeners while keeping click events", () => {
+		const hook = new FakeHook();
+		expect(installHookMouseMoveFilter(hook as unknown as UiohookLike, false)).toBe(true);
+
+		expect(
+			startAndDeliver(hook, [
+				EVENT_MOUSE_MOVED,
+				EVENT_MOUSE_PRESSED,
+				EVENT_MOUSE_MOVED,
+				EVENT_MOUSE_RELEASED,
+				EVENT_MOUSE_MOVED,
+			]),
+		).toEqual([EVENT_MOUSE_PRESSED, EVENT_MOUSE_RELEASED]);
+	});
+
+	it("keeps mousemove on the platform that reads cursor position from the hook", () => {
+		const hook = new FakeHook();
+		expect(installHookMouseMoveFilter(hook as unknown as UiohookLike, true)).toBe(true);
+
+		expect(startAndDeliver(hook, [EVENT_MOUSE_MOVED, EVENT_MOUSE_PRESSED])).toEqual([
+			EVENT_MOUSE_MOVED,
+			EVENT_MOUSE_PRESSED,
+		]);
+	});
+
+	it("does not wrap the dispatcher twice when capture restarts", () => {
+		const hook = new FakeHook();
+		const hookLike = hook as unknown as UiohookLike;
+
+		expect(installHookMouseMoveFilter(hookLike, false)).toBe(true);
+		const wrapped = hook.handler;
+		expect(installHookMouseMoveFilter(hookLike, false)).toBe(false);
+		expect(hook.handler).toBe(wrapped);
+
+		expect(startAndDeliver(hook, [EVENT_MOUSE_MOVED, EVENT_MOUSE_RELEASED])).toEqual([
+			EVENT_MOUSE_RELEASED,
+		]);
+	});
+
+	it("leaves hooks without a native dispatch entry point untouched", () => {
+		const hook = { on: vi.fn(), start: vi.fn() } as unknown as UiohookLike;
+
+		expect(installHookMouseMoveFilter(hook, false)).toBe(false);
+		expect(hook.handler).toBeUndefined();
 	});
 });
 

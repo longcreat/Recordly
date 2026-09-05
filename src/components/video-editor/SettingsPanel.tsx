@@ -22,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getAssetPath, getRenderableVideoUrl, getWallpaperThumbnailUrl } from "@/lib/assetPath";
+import { MAX_PREVIEW_PLAYBACK_RATE } from "@/lib/mediaTiming";
 import { cn } from "@/lib/utils";
 import type { BuiltInWallpaper } from "@/lib/wallpapers";
 import {
@@ -3054,6 +3055,15 @@ export function SettingsPanel({
 						);
 					})}
 				</div>
+
+				{selectedClipSpeed != null && selectedClipSpeed > MAX_PREVIEW_PLAYBACK_RATE && (
+					<p className="text-[9px] leading-snug text-muted-foreground/70">
+						{tSettings(
+							"clip.previewSpeedHint",
+							"Preview caps at 16×; export keeps the selected speed.",
+						)}
+					</p>
+				)}
 
 				<div className="mt-2 flex flex-col gap-2 border-t border-foreground/5 pt-3">
 					<SectionLabel>{tSettings("audio.title", "Audio")}</SectionLabel>

@@ -14,6 +14,7 @@ import {
 import type {
 	CursorInteractionType,
 	HookMouseEvent,
+	HookRawEvent,
 	UiohookLike,
 	UiohookModuleNamespace,
 } from "../types";
@@ -47,6 +48,59 @@ export function getHookMouseButton(event: HookMouseEvent | null | undefined): 1 
 	return normalizeHookMouseButton(
 		event?.button ?? event?.mouseButton ?? event?.data?.button ?? event?.data?.mouseButton,
 	);
+}
+
+/** libuiohook's EVENT_MOUSE_MOVED, mirrored from uiohook-napi's EventType enum. */
+const UIOHOOK_EVENT_MOUSE_MOVED = 9;
+
+export function shouldForwardHookEvent(
+	eventType: unknown,
+	options: { forwardMouseMove: boolean },
+): boolean {
+	// Forward anything we cannot classify so a future uiohook-napi release can
+	// never silently drop the click events cursor telemetry depends on.
+	if (typeof eventType !== "number" || !Number.isFinite(eventType)) {
+		return true;
+	}
+
+	if (eventType === UIOHOOK_EVENT_MOUSE_MOVED) {
+		return options.forwardMouseMove;
+	}
+
+	return true;
+}
+
+const moveFilteredHooks = new WeakSet<object>();
+
+/**
+ * Stop high-frequency pointer movement before it reaches the EventEmitter.
+ *
+ * uiohook-napi's native addon calls `hook.handler(event)` for every event the
+ * global hook observes, and `handler` unconditionally emits `input` plus the
+ * per-type event. A 500-1000 Hz mouse therefore drives thousands of emit() calls
+ * per second on Electron's main thread even though this app only consumes
+ * `mousemove` on Linux, which delays the IPC behind HUD stop/pause clicks.
+ * Because `start()` binds `this.handler`, installing an own property beforehand
+ * swaps in a filtered entry point without patching the native addon.
+ *
+ * Returns whether the filter was installed by this call.
+ */
+export function installHookMouseMoveFilter(hook: UiohookLike, forwardMouseMove: boolean): boolean {
+	const dispatcher = hook.handler;
+	if (typeof dispatcher !== "function" || moveFilteredHooks.has(hook)) {
+		return false;
+	}
+
+	const boundDispatcher = dispatcher.bind(hook);
+	hook.handler = (event: HookRawEvent) => {
+		if (!shouldForwardHookEvent(event?.type, { forwardMouseMove })) {
+			return;
+		}
+		boundDispatcher(event);
+	};
+	moveFilteredHooks.add(hook);
+
+	return true;
 }
 
 export function stopInteractionCapture() {
@@ -187,12 +241,15 @@ export function shouldStartGlobalInteractionHook(platform: NodeJS.Platform = pro
 	return platform !== "darwin";
 }
 
-export function recordCursorMouseDown(button: 1 | 2 | 3) {
+export function recordCursorMouseDown(
+	button: 1 | 2 | 3,
+	hookPoint?: { x: number; y: number } | null,
+) {
 	if (!isCursorCaptureActive || isCursorCapturePaused()) {
 		return;
 	}
 
-	const point = getNormalizedCursorPoint();
+	const point = getNormalizedCursorPoint(hookPoint);
 	if (!point) {
 		return;
 	}
@@ -220,12 +277,12 @@ export function recordCursorMouseDown(button: 1 | 2 | 3) {
 	pushCursorSample(point.cx, point.cy, timeMs, interactionType);
 }
 
-export function recordCursorMouseUp() {
+export function recordCursorMouseUp(hookPoint?: { x: number; y: number } | null) {
 	if (!isCursorCaptureActive || isCursorCapturePaused()) {
 		return;
 	}
 
-	const point = getNormalizedCursorPoint();
+	const point = getNormalizedCursorPoint(hookPoint);
 	if (!point) {
 		return;
 	}
@@ -268,12 +325,16 @@ export async function startInteractionCapture() {
 			return;
 		}
 
+		// Only Linux consumes hook mousemove (Electron's cursor position is
+		// unreliable there); everywhere else it is pure main-thread overhead.
+		installHookMouseMoveFilter(hook, process.platform === "linux");
+
 		const onMouseDown = (event: HookMouseEvent) => {
-			recordCursorMouseDown(getHookMouseButton(event));
+			recordCursorMouseDown(getHookMouseButton(event), getHookCursorScreenPoint(event));
 		};
 
-		const onMouseUp = () => {
-			recordCursorMouseUp();
+		const onMouseUp = (event: HookMouseEvent) => {
+			recordCursorMouseUp(getHookCursorScreenPoint(event));
 		};
 
 		const onMouseMove = (event: HookMouseEvent) => {

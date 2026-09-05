@@ -23,7 +23,8 @@
 		"mutedState": "Le son est coupé",
 		"unmutedState": "Le son est activé",
 		"separateClipFromAudio": "Séparer le clip de l'audio",
-		"delete": "Supprimer le clip"
+		"delete": "Supprimer le clip",
+		"previewSpeedHint": "L'aperçu est limité à 16× ; l'exportation conserve la vitesse choisie."
 	},
 	"effects": {
 		"title": "Effets vidéo",

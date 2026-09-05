@@ -1,5 +1,5 @@
 import type React from "react";
-import { enablePitchPreservingPlayback } from "@/lib/mediaTiming";
+import { applyPreviewPlaybackRate, enablePitchPreservingPlayback } from "@/lib/mediaTiming";
 import type { SpeedRegion, TrimRegion } from "../types";
 
 interface PresentedFrameMetadata {
@@ -136,7 +136,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			// Apply playback speed from active speed region
 			const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
 			enablePitchPreservingPlayback(video);
-			video.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+			applyPreviewPlaybackRate(video, activeSpeedRegion ? activeSpeedRegion.speed : 1);
 			emitTime(presentedTime);
 		}
 

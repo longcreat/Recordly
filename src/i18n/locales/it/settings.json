@@ -23,7 +23,8 @@
 		"mutedState": "Audio disattivato",
 		"unmutedState": "Audio in riproduzione",
 		"separateClipFromAudio": "Separa clip dall'audio",
-		"delete": "Elimina clip"
+		"delete": "Elimina clip",
+		"previewSpeedHint": "L'anteprima arriva a 16×; l'esportazione mantiene la velocità selezionata."
 	},
 	"effects": {
 		"title": "Effetti video",

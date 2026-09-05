@@ -1871,7 +1871,7 @@ export function hasNvidiaGpuDeviceInGpuInfo(gpuInfo: unknown) {
 
 async function hasNvidiaGpuForCudaExportCandidate() {
 	const hasNvidiaGpu = await probeNvidiaGpuForCudaExportCandidate();
-	return hasNvidiaGpu ?? true;
+	return hasNvidiaGpu ?? false;
 }
 
 async function probeNvidiaGpuForCudaExportCandidate(): Promise<boolean | null> {

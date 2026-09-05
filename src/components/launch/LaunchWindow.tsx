@@ -108,11 +108,13 @@ function LaunchWindowContent() {
 	} = useVideoDevices(webcamEnabled || openId === "webcam");
 
 	const {
+		recordingsDirectory,
 		hudOverlayMousePassthroughSupported,
 		platform,
 		appVersion,
 		hideHudFromCapture,
 		chooseRecordingsDirectory,
+		openRecordingsFolder,
 		toggleHudCaptureProtection,
 	} = useLaunchWindowSystemState(preparePermissions);
 
@@ -375,11 +377,15 @@ function LaunchWindowContent() {
 			<MorePopover
 				supportsHudCaptureProtection={hudCaptureProtectionSupported}
 				hideHudFromCapture={hideHudFromCapture}
+				recordingsDirectory={recordingsDirectory}
 				onToggleHudCaptureProtection={() => {
 					void toggleHudCaptureProtection();
 				}}
 				onChooseRecordingsDirectory={() => {
 					void chooseRecordingsDirectory();
+				}}
+				onOpenRecordingsFolder={() => {
+					void openRecordingsFolder();
 				}}
 				onOpenVideoFile={() => {
 					void openVideoFile();

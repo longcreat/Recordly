@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { buildResolvedAudioPlan } from "@/lib/exporter/audioRoutingEngine";
 import { resolveMediaElementSource } from "@/lib/exporter/localMediaSource";
 import {
+	applyPreviewPlaybackRate,
 	clampMediaTimeToDuration,
 	enablePitchPreservingPlayback,
 	estimateCompanionAudioStartDelaySeconds,
@@ -368,9 +369,7 @@ export function useAudioPreviewSync({
 					currentTime: audio.currentTime,
 					targetTime: audioOffset,
 				});
-				if (Math.abs(audio.playbackRate - syncedPlaybackRate) > 0.001) {
-					audio.playbackRate = syncedPlaybackRate;
-				}
+				applyPreviewPlaybackRate(audio, syncedPlaybackRate);
 				if (audio.paused) {
 					audio.play().catch(() => undefined);
 				}
@@ -451,9 +450,7 @@ export function useAudioPreviewSync({
 			// KISS for companion source tracks: fixed playback rate avoids audible flutter/stutter
 			// from continuous micro-corrections on system audio.
 			const syncedPlaybackRate = targetPlaybackRate;
-			if (Math.abs(audio.playbackRate - syncedPlaybackRate) > 0.001) {
-				audio.playbackRate = syncedPlaybackRate;
-			}
+			applyPreviewPlaybackRate(audio, syncedPlaybackRate);
 
 			const atEnd = audioDuration !== null && targetTime >= audioDuration;
 			if (isPlaying && !beforeAudioStart && !atEnd) {

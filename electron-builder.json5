@@ -105,10 +105,19 @@
     "target": [
       "nsis"
     ],
-    "icon": "icons/icons/win/icon.ico"
-    ,
+    "icon": "icons/icons/win/icon.ico",
     "executableName": "Recordly",
     "artifactName": "${productName}-windows-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "perMachine": false,
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "Recordly",
+    "uninstallDisplayName": "${productName} ${version}",
+    "runAfterFinish": true
   }
 }
 

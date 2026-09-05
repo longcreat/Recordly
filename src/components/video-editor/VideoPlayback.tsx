@@ -15,6 +15,7 @@ import { getAssetPath, getRenderableAssetUrl, getRenderableVideoUrl } from "@/li
 import { getWebcamShadowFilter } from "@/lib/exporter/shadowProfile";
 import { getSquircleSvgPath } from "@/lib/geometry/squircle";
 import {
+	applyPreviewPlaybackRate,
 	clampMediaTimeToDuration,
 	enablePitchPreservingPlayback,
 	getMediaSyncPlaybackRate,
@@ -1333,9 +1334,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				correctionWindowSeconds: 1.5,
 				maxAdjustment: 0.12,
 			});
-			if (Math.abs(bgVideo.playbackRate - syncedPlaybackRate) > 0.001) {
-				bgVideo.playbackRate = syncedPlaybackRate;
-			}
+			applyPreviewPlaybackRate(bgVideo, syncedPlaybackRate);
 
 			const previousTimelineTime = lastBackgroundSyncTimeRef.current;
 			const timelineJumped =
@@ -1691,9 +1690,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			);
 			const targetPlaybackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
 			enablePitchPreservingPlayback(webcamVideo);
-			if (Math.abs(webcamVideo.playbackRate - targetPlaybackRate) > 0.001) {
-				webcamVideo.playbackRate = targetPlaybackRate;
-			}
+			applyPreviewPlaybackRate(webcamVideo, targetPlaybackRate);
 
 			const previousTimelineTime = lastWebcamSyncTimeRef.current;
 			if (
