@@ -83,8 +83,11 @@ export function useExportDialogActions({
 	}, [videoPath, videoPlaybackRef, hasCaptionsForSidecar, settings, session, handleExport]);
 
 	const handleCancelExport = useCallback(() => {
-		if (!session.exporterRef.current) return;
-		session.exporterRef.current.cancel();
+		if (!session.isExporting) return;
+		session.cancelledExportRunIdRef.current = session.exportRunIdRef.current;
+		session.exportRunIdRef.current += 1;
+		session.exporterRef.current?.cancel();
+		session.exporterRef.current = null;
 		toast.info("Export canceled");
 		session.clearPendingExportSave();
 		session.setShowExportDropdown(false);

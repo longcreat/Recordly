@@ -1165,6 +1165,17 @@ export function SettingsPanel({
 	};
 
 	useEffect(() => {
+		if (
+			!isBackgroundPanel &&
+			activeEffectSection !== "scene" &&
+			activeEffectSection !== "frame" &&
+			activeEffectSection !== "crop" &&
+			activeEffectSection !== "extensions" &&
+			!activeEffectSection.startsWith("ext:")
+		) {
+			return;
+		}
+
 		let mounted = true;
 		(async () => {
 			try {

@@ -71,6 +71,8 @@ export function useExportRunner(input: ExportRunnerInput) {
 				pendingExportSaveRef,
 				clearPendingExportSave,
 				markExportAsSaving,
+				exportRunIdRef,
+				cancelledExportRunIdRef,
 			} = exportSession;
 			if (!videoPath) {
 				toast.error("No video loaded");
@@ -83,6 +85,19 @@ export function useExportRunner(input: ExportRunnerInput) {
 				return;
 			}
 
+			const exportRunId = exportRunIdRef.current + 1;
+			exportRunIdRef.current = exportRunId;
+			cancelledExportRunIdRef.current = null;
+			const exportWasCancelled = () => exportRunIdRef.current !== exportRunId;
+			const exportWasExplicitlyCancelled = () =>
+				cancelledExportRunIdRef.current === exportRunId;
+			const discardCancelledTemp = async (pending: PendingExportSave) => {
+				if (!pending.tempFilePath) return;
+				await window.electronAPI
+					.discardExportedTemp?.(pending.tempFilePath)
+					.catch(() => undefined);
+			};
+
 			setIsExporting(true);
 			setExportProgress(null);
 			setExportError(null);
@@ -90,10 +105,10 @@ export function useExportRunner(input: ExportRunnerInput) {
 			const smokeExportStartedAt = smokeExportConfig.enabled ? performance.now() : null;
 
 			let keepExportDialogOpen = false;
+			const wasPlaying = isPlaying;
+			const restoreTime = video.currentTime;
 
 			try {
-				const wasPlaying = isPlaying;
-				const restoreTime = video.currentTime;
 				if (wasPlaying) {
 					videoPlaybackRef.current?.pause();
 				}
@@ -134,6 +149,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 							previewHeight,
 							shadowIntensity: effectiveShadowIntensity,
 							onProgress: (progress) => {
+								if (exportWasCancelled()) return;
 								recordSmokeProgress(progress);
 								setExportProgress(progress);
 							},
@@ -156,6 +172,10 @@ export function useExportRunner(input: ExportRunnerInput) {
 							fileName,
 							smokeExportConfig.enabled ? smokeExportConfig.outputPath : null,
 						);
+						if (exportWasCancelled()) {
+							await discardCancelledTemp(pendingSave);
+							return;
+						}
 
 						if (saveResult.canceled) {
 							pendingExportSaveRef.current = pendingSave;
@@ -273,6 +293,7 @@ export function useExportRunner(input: ExportRunnerInput) {
 							previewHeight,
 							shadowIntensity: effectiveShadowIntensity,
 							onProgress: (progress) => {
+								if (exportWasCancelled()) return;
 								recordSmokeProgress(progress);
 								setExportProgress(progress);
 							},
@@ -330,6 +351,14 @@ export function useExportRunner(input: ExportRunnerInput) {
 										: null,
 								captionSidecar: sidecarForThisExport,
 							});
+							if (exportWasCancelled()) {
+								await discardCancelledTemp({
+									fileName,
+									tempFilePath: result.tempFilePath,
+									captionSidecar: sidecarForThisExport,
+								});
+								return;
+							}
 							pendingOnCancel = {
 								fileName,
 								tempFilePath: result.tempFilePath,
@@ -345,6 +374,10 @@ export function useExportRunner(input: ExportRunnerInput) {
 								smokeExportConfig.enabled ? smokeExportConfig.outputPath : null,
 								sidecarForThisExport,
 							);
+							if (exportWasCancelled()) {
+								await discardCancelledTemp(blobSave.pendingSave);
+								return;
+							}
 							saveResult = blobSave.saveResult;
 							pendingOnCancel = blobSave.pendingSave;
 						} else {
@@ -487,10 +520,17 @@ export function useExportRunner(input: ExportRunnerInput) {
 					window.close();
 				}
 			} finally {
-				setIsExporting(false);
-				exporterRef.current = null;
-				setShowExportDropdown(keepExportDialogOpen);
-				remountPreview();
+				if (exportWasExplicitlyCancelled() && exportRunIdRef.current === exportRunId + 1) {
+					video.currentTime = restoreTime;
+					if (wasPlaying) {
+						await videoPlaybackRef.current?.play().catch(() => undefined);
+					}
+				} else if (!exportWasCancelled()) {
+					setIsExporting(false);
+					exporterRef.current = null;
+					setShowExportDropdown(keepExportDialogOpen);
+					remountPreview();
+				}
 			}
 		},
 		[showExportSuccessToast],
