@@ -59,19 +59,13 @@ export async function getAssetPath(relativePath: string): Promise<string> {
 	const isWebContext =
 		typeof window !== "undefined" && Boolean(window.location?.protocol?.startsWith("http"));
 
-	if (isWebContext) {
-		return `/${encodedRelativePath}`;
-	}
-
 	try {
 		if (typeof window !== "undefined") {
 			if (typeof window.electronAPI?.getAssetBasePath === "function") {
 				const base = await window.electronAPI.getAssetBasePath();
-				if (!base) {
-					throw new Error(`Failed to resolve asset base path for ${relativePath}`);
+				if (base) {
+					return new URL(encodedRelativePath, ensureTrailingSlash(base)).toString();
 				}
-
-				return new URL(encodedRelativePath, ensureTrailingSlash(base)).toString();
 			}
 		}
 	} catch (error) {
@@ -80,8 +74,13 @@ export async function getAssetPath(relativePath: string): Promise<string> {
 		}
 	}
 
-	// Fallback for web/dev server: public/wallpapers are served at '/wallpapers/...'
-	return `/${encodedRelativePath}`;
+	if (isWebContext) {
+		// Dev and browser contexts serve public assets from the site root. Packaged
+		// Electron windows resolve above to the single extraResources asset copy.
+		return `/${encodedRelativePath}`;
+	}
+
+	throw new Error(`Failed to resolve asset base path for ${relativePath}`);
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;

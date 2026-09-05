@@ -1,5 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getExportableVideoUrl, getRenderableAssetUrl, getRenderableVideoUrl } from "./assetPath";
+import {
+	getAssetPath,
+	getExportableVideoUrl,
+	getRenderableAssetUrl,
+	getRenderableVideoUrl,
+} from "./assetPath";
+
+describe("getAssetPath", () => {
+	beforeEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("uses the packaged asset directory from an HTTP renderer", async () => {
+		vi.stubGlobal("window", {
+			location: { protocol: "http:" },
+			electronAPI: {
+				getAssetBasePath: vi.fn(
+					async () => "file:///Applications/Recordly.app/Contents/Resources/assets/",
+				),
+			},
+		});
+
+		await expect(getAssetPath("wallpapers/tahoe-light.jpg")).resolves.toBe(
+			"file:///Applications/Recordly.app/Contents/Resources/assets/wallpapers/tahoe-light.jpg",
+		);
+	});
+
+	it("uses root-relative assets when the dev server has no packaged asset base", async () => {
+		vi.stubGlobal("window", {
+			location: { protocol: "http:" },
+			electronAPI: {
+				getAssetBasePath: vi.fn(async () => null),
+			},
+		});
+
+		await expect(getAssetPath("wallpapers/tahoe-light.jpg")).resolves.toBe(
+			"/wallpapers/tahoe-light.jpg",
+		);
+	});
+});
 
 describe("getRenderableAssetUrl", () => {
 	beforeEach(() => {

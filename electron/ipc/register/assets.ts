@@ -2,10 +2,10 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import { USER_DATA_PATH } from "../../appPaths";
-import { normalizePath } from "../utils";
 import { getAssetRootPath } from "../project/manager";
+import { normalizePath } from "../utils";
 
 export function registerAssetHandlers() {
 	async function resolveReadableLocalFilePath(filePath: string) {
@@ -73,6 +73,10 @@ export function registerAssetHandlers() {
 
 	// Return base path for assets so renderer can resolve file:// paths in production
 	ipcMain.handle("get-asset-base-path", () => {
+		if (!app.isPackaged) {
+			return null;
+		}
+
 		try {
 			const assetPath = getAssetRootPath();
 			return pathToFileURL(`${assetPath}${path.sep}`).toString();
