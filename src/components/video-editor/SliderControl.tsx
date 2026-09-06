@@ -1,6 +1,8 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useRef, memo, useEffect } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+
+export type SliderScale = "linear" | "logarithmic";
 
 interface SliderControlProps {
 	label: string;
@@ -13,18 +15,54 @@ interface SliderControlProps {
 	formatValue: (value: number) => string;
 	parseInput: (text: string) => number | null;
 	accentColor?: "purple" | "blue";
+	// "logarithmic" spaces values by ratio so 0.5x->1x feels as wide as 1x->2x.
+	// Used for playback speed; requires min > 0, otherwise it degrades to linear.
+	scale?: SliderScale;
+	// When true, onChange fires only on pointer release while the drag updates the
+	// visual locally. Use for expensive or rejectable commits (e.g. clip speed).
+	commitOnRelease?: boolean;
 }
 
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
 }
 
-function quantizeToStep(value: number, min: number, step: number) {
+export function quantizeToStep(value: number, min: number, step: number) {
 	if (!(step > 0)) {
 		return value;
 	}
 
 	return min + Math.round((value - min) / step) * step;
+}
+
+// Maps a normalized track position (0..1) to a value. Logarithmic mapping keeps
+// perceptual spacing even across a multiplicative range; it falls back to linear
+// when the bounds are not strictly positive and ordered.
+export function sliderPositionToValue(
+	position: number,
+	min: number,
+	max: number,
+	scale: SliderScale,
+): number {
+	if (scale === "logarithmic" && min > 0 && max > min) {
+		return min * (max / min) ** position;
+	}
+
+	return min + position * (max - min);
+}
+
+// Inverse of sliderPositionToValue: maps a value back to its 0..1 track position.
+export function sliderValueToPosition(
+	value: number,
+	min: number,
+	max: number,
+	scale: SliderScale,
+): number {
+	if (scale === "logarithmic" && min > 0 && max > min && value > 0) {
+		return Math.log(value / min) / Math.log(max / min);
+	}
+
+	return (value - min) / (max - min || 1);
 }
 
 export const SliderControl = memo(function SliderControl({
@@ -38,13 +76,22 @@ export const SliderControl = memo(function SliderControl({
 	formatValue,
 	parseInput: _parseInput,
 	accentColor = "blue",
+	scale = "linear",
+	commitOnRelease = false,
 }: SliderControlProps) {
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	const valueTextRef = useRef<HTMLSpanElement | null>(null);
 	const boundsRef = useRef<DOMRect | null>(null);
 	const requestRef = useRef<number | null>(null);
+	// In commit-on-release mode the pending value lives here so the track and label
+	// follow the pointer even though the parent's `value` prop has not updated yet.
+	const [dragValue, setDragValue] = useState<number | null>(null);
+	const displayValue = dragValue ?? value;
 
-	const pct = Math.min(100, Math.max(0, ((value - min) / (max - min || 1)) * 100));
+	const pct = Math.min(
+		100,
+		Math.max(0, sliderValueToPosition(displayValue, min, max, scale) * 100),
+	);
 
 	const dividerClass =
 		accentColor === "purple"
@@ -58,18 +105,24 @@ export const SliderControl = memo(function SliderControl({
 		}
 	}, [pct]);
 
-	const updateValue = useCallback(
-		(clientX: number) => {
+	const computeValueAt = useCallback(
+		(clientX: number): number | null => {
 			const bounds = boundsRef.current;
 			if (!bounds || bounds.width <= 6) {
-				return;
+				return null;
 			}
 
 			const normalized = clamp((clientX - (bounds.left + 3)) / (bounds.width - 6), 0, 1);
-			const rawValue = min + normalized * (max - min);
+			const rawValue = sliderPositionToValue(normalized, min, max, scale);
 			const nextValue = clamp(quantizeToStep(rawValue, min, step), min, max);
-			const finalValue = Number(nextValue.toFixed(6));
-			const finalPct = (((finalValue - min) / (max - min || 1)) * 100).toFixed(4);
+			return Number(nextValue.toFixed(6));
+		},
+		[max, min, scale, step],
+	);
+
+	const paintValue = useCallback(
+		(finalValue: number) => {
+			const finalPct = (sliderValueToPosition(finalValue, min, max, scale) * 100).toFixed(4);
 
 			// Direct DOM update for instant feedback
 			if (rootRef.current) {
@@ -80,11 +133,27 @@ export const SliderControl = memo(function SliderControl({
 			if (valueTextRef.current) {
 				valueTextRef.current.textContent = formatValue(finalValue);
 			}
-
-			// Notify parent
-			onChange(finalValue);
 		},
-		[max, min, onChange, step, formatValue],
+		[formatValue, max, min, scale],
+	);
+
+	const updateValue = useCallback(
+		(clientX: number) => {
+			const finalValue = computeValueAt(clientX);
+			if (finalValue == null) {
+				return;
+			}
+
+			paintValue(finalValue);
+
+			if (commitOnRelease) {
+				// Hold the pending value locally; notify the parent on release only.
+				setDragValue(finalValue);
+			} else {
+				onChange(finalValue);
+			}
+		},
+		[commitOnRelease, computeValueAt, onChange, paintValue],
 	);
 
 	const handlePointerDown = useCallback(
@@ -124,7 +193,15 @@ export const SliderControl = memo(function SliderControl({
 				}
 
 				if (finishEvent.type === "pointerup") {
-					updateValue(finishEvent.clientX);
+					if (commitOnRelease) {
+						const finalValue = computeValueAt(finishEvent.clientX);
+						setDragValue(null);
+						if (finalValue != null) {
+							onChange(finalValue);
+						}
+					} else {
+						updateValue(finishEvent.clientX);
+					}
 				}
 
 				target.releasePointerCapture(pointerId);
@@ -138,7 +215,7 @@ export const SliderControl = memo(function SliderControl({
 			target.addEventListener("pointerup", finishPointer);
 			target.addEventListener("pointercancel", finishPointer);
 		},
-		[updateValue],
+		[commitOnRelease, computeValueAt, onChange, updateValue],
 	);
 
 	return (
@@ -149,8 +226,8 @@ export const SliderControl = memo(function SliderControl({
 			aria-label={label}
 			aria-valuemin={min}
 			aria-valuemax={max}
-			aria-valuenow={value}
-			aria-valuetext={formatValue(value)}
+			aria-valuenow={displayValue}
+			aria-valuetext={formatValue(displayValue)}
 			onPointerDown={handlePointerDown}
 			onKeyDown={(event) => {
 				if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
@@ -192,7 +269,7 @@ export const SliderControl = memo(function SliderControl({
 				ref={valueTextRef}
 				className="pointer-events-none relative z-10 pr-3 text-[12px] font-medium tabular-nums text-foreground"
 			>
-				{formatValue(value)}
+				{formatValue(displayValue)}
 			</span>
 		</div>
 	);

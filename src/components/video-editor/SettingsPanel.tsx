@@ -3015,46 +3015,22 @@ export function SettingsPanel({
 					)}
 				</div>
 
-				<div className="flex items-center gap-3">
-					<SectionLabel>{tSettings("speed.label", "Speed")}</SectionLabel>
-				</div>
-				<div className="grid grid-cols-4 gap-1.5">
-					{[
-						{ speed: 0.25, label: "0.25×" },
-						{ speed: 0.5, label: "0.5×" },
-						{ speed: 0.75, label: "0.75×" },
-						{ speed: 1, label: "1×" },
-						{ speed: 1.25, label: "1.25×" },
-						{ speed: 1.5, label: "1.5×" },
-						{ speed: 2, label: "2×" },
-						{ speed: 2.5, label: "2.5×" },
-						{ speed: 3, label: "3×" },
-						{ speed: 4, label: "4×" },
-						{ speed: 5, label: "5×" },
-						{ speed: 8, label: "8×" },
-						{ speed: 10, label: "10×" },
-						{ speed: 15, label: "15×" },
-						{ speed: 20, label: "20×" },
-						{ speed: 30, label: "30×" },
-					].map((option) => {
-						const isActive = selectedClipSpeed === option.speed;
-						return (
-							<Button
-								key={option.speed}
-								type="button"
-								onClick={() => onClipSpeedChange?.(option.speed)}
-								className={cn(
-									"h-auto w-full rounded-lg border px-0.5 py-2 text-center shadow-sm transition-all duration-200 ease-out cursor-pointer",
-									isActive
-										? "border-[#06b6d4] bg-[#06b6d4] text-white"
-										: "border-foreground/5 bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:border-foreground/10 hover:text-foreground",
-								)}
-							>
-								<span className="text-[10px] font-semibold">{option.label}</span>
-							</Button>
-						);
-					})}
-				</div>
+				<SliderControl
+					label={tSettings("speed.label", "Speed")}
+					value={selectedClipSpeed ?? 1}
+					defaultValue={1}
+					min={0.5}
+					max={30}
+					step={0.5}
+					scale="logarithmic"
+					commitOnRelease
+					onChange={(speed) => onClipSpeedChange?.(speed)}
+					formatValue={(speed) => `${speed}×`}
+					parseInput={(text) => {
+						const parsed = Number.parseFloat(text.replace("×", ""));
+						return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+					}}
+				/>
 
 				{selectedClipSpeed != null && selectedClipSpeed > MAX_PREVIEW_PLAYBACK_RATE && (
 					<p className="text-[9px] leading-snug text-muted-foreground/70">
