@@ -671,6 +671,7 @@ interface Window {
 			success: boolean;
 			exists: boolean;
 			path?: string | null;
+			managedPaths?: string[];
 			error?: string;
 		}>;
 		downloadWhisperSmallModel: () => Promise<{

@@ -48,7 +48,6 @@ export function useAutoCaptionController({
 	setWhisperExecutablePath,
 	whisperModelPath,
 	setWhisperModelPath,
-	downloadedWhisperModelPath,
 	setDownloadedWhisperModelPath,
 	whisperModelDownloadStatus,
 	setWhisperModelDownloadStatus,
@@ -61,6 +60,18 @@ export function useAutoCaptionController({
 	syncActiveVideoSource,
 }: UseAutoCaptionControllerParams) {
 	const captionGenerationInFlightRef = useRef(false);
+
+	// A persisted whisperModelPath can outlive the file it points at (e.g. the model
+	// was deleted or moved). Clear it when it references a managed small-model
+	// location that no longer exists, so the UI doesn't keep offering "Delete Model".
+	const clearStaleManagedModelPath = useCallback(
+		(managedPaths?: string[]) => {
+			setWhisperModelPath((current) =>
+				current && (managedPaths ?? []).includes(current) ? null : current,
+			);
+		},
+		[setWhisperModelPath],
+	);
 
 	useEffect(() => {
 		const unsubscribe = window.electronAPI.onWhisperSmallModelDownloadProgress((state) => {
@@ -87,11 +98,13 @@ export function useAutoCaptionController({
 				setDownloadedWhisperModelPath(null);
 				setWhisperModelDownloadStatus("idle");
 				setWhisperModelDownloadProgress(0);
+				clearStaleManagedModelPath(result.managedPaths);
 			}
 		});
 
 		return () => unsubscribe?.();
 	}, [
+		clearStaleManagedModelPath,
 		setDownloadedWhisperModelPath,
 		setWhisperModelDownloadProgress,
 		setWhisperModelDownloadStatus,
@@ -140,17 +153,18 @@ export function useAutoCaptionController({
 			toast.error(result.error || "Failed to delete Whisper small model");
 			return;
 		}
-		setWhisperModelPath((current) => (current === downloadedWhisperModelPath ? null : current));
 		setDownloadedWhisperModelPath(null);
 		setWhisperModelDownloadStatus("idle");
 		setWhisperModelDownloadProgress(0);
+		// Drop a persisted model path that pointed at the now-deleted managed model.
+		const status = await window.electronAPI.getWhisperSmallModelStatus();
+		clearStaleManagedModelPath(status.success ? status.managedPaths : undefined);
 		toast.success("Whisper small model deleted");
 	}, [
-		downloadedWhisperModelPath,
+		clearStaleManagedModelPath,
 		setDownloadedWhisperModelPath,
 		setWhisperModelDownloadProgress,
 		setWhisperModelDownloadStatus,
-		setWhisperModelPath,
 	]);
 
 	const handleGenerateAutoCaptions = useCallback(async () => {

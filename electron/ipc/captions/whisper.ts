@@ -57,12 +57,19 @@ async function resolveWritableModelDir(): Promise<string> {
 	return LEGACY_WHISPER_MODEL_DIR;
 }
 
+function getManagedWhisperModelPaths(): string[] {
+	return [...new Set([getWhisperSmallModelPath(), LEGACY_WHISPER_SMALL_MODEL_PATH])];
+}
+
 export async function getWhisperSmallModelStatus() {
 	const existingPath = await resolveExistingModelPath();
 	return {
 		success: true,
 		exists: existingPath !== null,
 		path: existingPath,
+		// Lets the renderer recognise (and clear) persisted paths that point at a
+		// managed small-model location which no longer exists on disk.
+		managedPaths: getManagedWhisperModelPaths(),
 	};
 }
 

@@ -2329,7 +2329,7 @@ export function SettingsPanel({
 								{tSettings("captions.downloading", "Downloading...")}{" "}
 								{Math.round(whisperModelDownloadProgress)}%
 							</Button>
-						) : whisperModelPath ? (
+						) : whisperModelDownloadStatus === "downloaded" ? (
 							<Button
 								type="button"
 								variant="outline"
