@@ -1,4 +1,5 @@
 import path from "node:path";
+import { app } from "electron";
 import { USER_DATA_PATH } from "../appPaths";
 
 export const PROJECT_FILE_EXTENSION = "recordly";
@@ -18,8 +19,32 @@ export const ALLOW_RECORDLY_WINDOW_CAPTURE = Boolean(process.env["VITE_DEV_SERVE
 export const RECORDING_SESSION_MANIFEST_SUFFIX = ".recordly-session.json";
 export const WHISPER_MODEL_DOWNLOAD_URL =
 	"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin";
-export const WHISPER_MODEL_DIR = path.join(USER_DATA_PATH, "whisper");
-export const WHISPER_SMALL_MODEL_PATH = path.join(WHISPER_MODEL_DIR, "ggml-small.bin");
+export const WHISPER_MODEL_FILE_NAME = "ggml-small.bin";
+// Legacy C-drive location (userData). Kept so an already-downloaded model still
+// works after upgrading, and used as the fallback target.
+export const LEGACY_WHISPER_MODEL_DIR = path.join(USER_DATA_PATH, "whisper");
+export const LEGACY_WHISPER_SMALL_MODEL_PATH = path.join(
+	LEGACY_WHISPER_MODEL_DIR,
+	WHISPER_MODEL_FILE_NAME,
+);
+
+// Portable model location: resolved at runtime so the model lands beside the app
+// on whatever drive the user installed to. Packaged apps derive the install root
+// from the running executable; dev builds (no install dir) fall back to userData.
+export function getWhisperModelDir(): string {
+	if (app.isPackaged) {
+		try {
+			return path.join(path.dirname(app.getPath("exe")), "whisper");
+		} catch {
+			// Fall through to the userData location below.
+		}
+	}
+	return LEGACY_WHISPER_MODEL_DIR;
+}
+
+export function getWhisperSmallModelPath(): string {
+	return path.join(getWhisperModelDir(), WHISPER_MODEL_FILE_NAME);
+}
 export const COMPANION_AUDIO_LAYOUTS = [
 	{ platform: "mac" as const, systemSuffix: ".system.m4a", micSuffix: ".mic.m4a" },
 	{ platform: "win" as const, systemSuffix: ".system.wav", micSuffix: ".mic.wav" },

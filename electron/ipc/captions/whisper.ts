@@ -1,11 +1,15 @@
 import { createWriteStream, constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
+import path from "node:path";
 import type Electron from "electron";
 import { net } from "electron";
 import {
-	WHISPER_MODEL_DIR,
+	getWhisperModelDir,
+	getWhisperSmallModelPath,
+	LEGACY_WHISPER_MODEL_DIR,
+	LEGACY_WHISPER_SMALL_MODEL_PATH,
 	WHISPER_MODEL_DOWNLOAD_URL,
-	WHISPER_SMALL_MODEL_PATH,
+	WHISPER_MODEL_FILE_NAME,
 } from "../constants";
 
 export function sendWhisperModelDownloadProgress(
@@ -20,21 +24,46 @@ export function sendWhisperModelDownloadProgress(
 	webContents.send("whisper-small-model-download-progress", payload);
 }
 
-export async function getWhisperSmallModelStatus() {
+async function fileReadable(filePath: string): Promise<boolean> {
 	try {
-		await fs.access(WHISPER_SMALL_MODEL_PATH, fsConstants.R_OK);
-		return {
-			success: true,
-			exists: true,
-			path: WHISPER_SMALL_MODEL_PATH,
-		};
+		await fs.access(filePath, fsConstants.R_OK);
+		return true;
 	} catch {
-		return {
-			success: true,
-			exists: false,
-			path: null,
-		};
+		return false;
 	}
+}
+
+// The model may live in the install dir (new portable default) or the legacy
+// userData dir (older installs). Prefer whichever already exists.
+async function resolveExistingModelPath(): Promise<string | null> {
+	for (const candidate of [getWhisperSmallModelPath(), LEGACY_WHISPER_SMALL_MODEL_PATH]) {
+		if (await fileReadable(candidate)) return candidate;
+	}
+	return null;
+}
+
+// Pick a writable target dir: prefer the install dir, fall back to userData when the
+// install dir isn't writable (e.g. a per-machine install without admin rights).
+async function resolveWritableModelDir(): Promise<string> {
+	for (const dir of [getWhisperModelDir(), LEGACY_WHISPER_MODEL_DIR]) {
+		try {
+			await fs.mkdir(dir, { recursive: true });
+			await fs.access(dir, fsConstants.W_OK);
+			return dir;
+		} catch {
+			// Try the next candidate.
+		}
+	}
+	return LEGACY_WHISPER_MODEL_DIR;
+}
+
+export async function getWhisperSmallModelStatus() {
+	const existingPath = await resolveExistingModelPath();
+	return {
+		success: true,
+		exists: existingPath !== null,
+		path: existingPath,
+	};
 }
 
 export function downloadFileWithProgress(
@@ -127,8 +156,9 @@ export function downloadFileWithProgress(
 export async function downloadWhisperSmallModel(
 	webContents: Electron.WebContents,
 ): Promise<string> {
-	await fs.mkdir(WHISPER_MODEL_DIR, { recursive: true });
-	const tempPath = `${WHISPER_SMALL_MODEL_PATH}.download`;
+	const targetDir = await resolveWritableModelDir();
+	const targetPath = path.join(targetDir, WHISPER_MODEL_FILE_NAME);
+	const tempPath = `${targetPath}.download`;
 
 	sendWhisperModelDownloadProgress(webContents, {
 		status: "downloading",
@@ -145,13 +175,13 @@ export async function downloadWhisperSmallModel(
 				path: null,
 			});
 		});
-		await fs.rename(tempPath, WHISPER_SMALL_MODEL_PATH);
+		await fs.rename(tempPath, targetPath);
 		sendWhisperModelDownloadProgress(webContents, {
 			status: "downloaded",
 			progress: 100,
-			path: WHISPER_SMALL_MODEL_PATH,
+			path: targetPath,
 		});
-		return WHISPER_SMALL_MODEL_PATH;
+		return targetPath;
 	} catch (error) {
 		await fs.rm(tempPath, { force: true }).catch(() => undefined);
 		sendWhisperModelDownloadProgress(webContents, {
@@ -165,5 +195,6 @@ export async function downloadWhisperSmallModel(
 }
 
 export async function deleteWhisperSmallModel(): Promise<void> {
-	await fs.rm(WHISPER_SMALL_MODEL_PATH, { force: true });
+	await fs.rm(getWhisperSmallModelPath(), { force: true }).catch(() => undefined);
+	await fs.rm(LEGACY_WHISPER_SMALL_MODEL_PATH, { force: true }).catch(() => undefined);
 }
