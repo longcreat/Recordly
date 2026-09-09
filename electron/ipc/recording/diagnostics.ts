@@ -524,7 +524,17 @@ export async function getCompanionAudioFallbackInfo(videoPath: string) {
 		if (!hasUsableMacSystemCompanion && usableMacMicOnlyCompanions.length > 0) {
 			paths = usableMacMicOnlyCompanions;
 		} else if (hasUsableMacSystemCompanion) {
-			paths = [videoPath];
+			// The inline mp4 audio track carries system audio only (the helper skips
+			// the microphone while system audio is captured), so returning the video
+			// alone drops the mic entirely.  Hand over both mac sidecars instead and
+			// let the renderer route them as independent system/mic tracks.
+			paths = Array.from(
+				new Set(
+					companionCandidates.flatMap((candidate) =>
+						candidate.platform === "mac" ? candidate.usablePaths : [],
+					),
+				),
+			);
 		} else {
 			const companionPaths = Array.from(
 				new Set(
