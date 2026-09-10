@@ -496,6 +496,16 @@ export async function getCompanionAudioFallbackPaths(videoPath: string) {
 	return paths;
 }
 
+/**
+ * Resolve which audio files the editor should play alongside `videoPath`, and
+ * the start delay recorded for each.
+ *
+ * The renderer treats a `.system.`/`.mic.` pair as independent tracks and mutes
+ * the video's own track when both are present.  The macOS helper writes system
+ * audio to the inline track but keeps both sources as sidecars, so once a mac
+ * system sidecar exists the sidecars are authoritative and are returned in place
+ * of the video.  Other layouts keep the embedded track and add the mic sidecar.
+ */
 export async function getCompanionAudioFallbackInfo(videoPath: string) {
 	const companionCandidates = await getUsableCompanionAudioCandidates(videoPath);
 	if (companionCandidates.length === 0) {
