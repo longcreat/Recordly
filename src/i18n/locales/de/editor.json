@@ -148,5 +148,9 @@
 		"expand": "Zeitleiste erweitern",
 		"collapse": "Zeitleiste reduzieren"
 	},
-	"openRecordingsFolder": "Aufnahmeordner öffnen"
+	"openRecordingsFolder": "Aufnahmeordner öffnen",
+	"recoveredRecordings": {
+		"toastSingular": "1 unterbrochene Aufnahme wiederhergestellt",
+		"toastPlural": "{{count}} unterbrochene Aufnahmen wiederhergestellt"
+	}
 }

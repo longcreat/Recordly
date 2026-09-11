@@ -20,9 +20,11 @@ import { useEditorUiState } from "./state/useEditorUiState";
 import { useProjectState } from "./state/useProjectState";
 import { useTimelineState } from "./state/useTimelineState";
 import { useNvidiaCudaExportOptIn } from "./useNvidiaCudaExportOptIn";
+import { useRecoveredRecordingsToast } from "./useRecoveredRecordingsToast";
 
 export default function VideoEditor() {
 	const { t } = useI18n();
+	useRecoveredRecordingsToast();
 	const smokeExportConfig = useMemo(
 		() => getSmokeExportConfig(typeof window === "undefined" ? "" : window.location.search),
 		[],

@@ -74,6 +74,7 @@ import {
 	waitForNativeCaptureStart,
 	waitForNativeCaptureStop,
 } from "../recording/mac";
+import { consumeRecoveredWindowsRecordings } from "../recording/recover";
 import { resolveRecordedVideoStoragePath } from "../recording/storagePath";
 import {
 	attachWindowsCaptureLifecycle,
@@ -492,9 +493,10 @@ export function registerRecordingHandlers(
 						const matchedMonitor = monitors.find(
 							(monitor) =>
 								(monitor.x === Math.round(captureTarget.bounds.x) &&
-								 monitor.y === Math.round(captureTarget.bounds.y)) ||
+									monitor.y === Math.round(captureTarget.bounds.y)) ||
 								(monitor.x === physX && monitor.y === physY) ||
-								(Math.abs(monitor.x - physX) <= 4 && Math.abs(monitor.y - physY) <= 4),
+								(Math.abs(monitor.x - physX) <= 4 &&
+									Math.abs(monitor.y - physY) <= 4),
 						);
 
 						if (matchedMonitor) {
@@ -1302,6 +1304,12 @@ export function registerRecordingHandlers(
 			success: false,
 			message: "No recoverable native macOS recording output was found.",
 		};
+	});
+
+	// Pull-based handoff for Windows crash recovery: the startup scan already relocated any orphaned
+	// recording into the library, so the renderer just asks once (on editor mount) whether to toast.
+	ipcMain.handle("get-recovered-recordings", () => {
+		return { success: true, recordings: consumeRecoveredWindowsRecordings() };
 	});
 
 	ipcMain.handle("pause-native-screen-recording", async () => {

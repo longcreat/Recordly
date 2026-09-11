@@ -149,5 +149,9 @@
 		"expand": "Expand Timeline",
 		"collapse": "Collapse Timeline"
 	},
-	"openRecordingsFolder": "Open recordings folder"
+	"openRecordingsFolder": "Open recordings folder",
+	"recoveredRecordings": {
+		"toastSingular": "Recovered 1 interrupted recording",
+		"toastPlural": "Recovered {{count}} interrupted recordings"
+	}
 }

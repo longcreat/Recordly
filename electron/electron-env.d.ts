@@ -726,6 +726,15 @@ interface Window {
 			};
 		}>;
 		getCurrentVideoPath: () => Promise<{ success: boolean; path?: string }>;
+		getRecoveredRecordings: () => Promise<{
+			success: boolean;
+			recordings?: Array<{
+				path: string;
+				timestamp: number;
+				hasSystemAudio: boolean;
+				hasMicAudio: boolean;
+			}>;
+		}>;
 		clearCurrentVideoPath: () => Promise<{ success: boolean }>;
 		deleteRecordingFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
 		getLocalMediaUrl: (

@@ -149,5 +149,9 @@
 		"expand": "Expandir linha do tempo",
 		"collapse": "Recolher linha do tempo"
 	},
-	"openRecordingsFolder": "Abrir pasta de gravações"
+	"openRecordingsFolder": "Abrir pasta de gravações",
+	"recoveredRecordings": {
+		"toastSingular": "1 gravação interrompida foi recuperada",
+		"toastPlural": "{{count}} gravações interrompidas foram recuperadas"
+	}
 }

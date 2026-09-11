@@ -149,5 +149,9 @@
 		"expand": "Espandi timeline",
 		"collapse": "Comprimi timeline"
 	},
-	"openRecordingsFolder": "Apri cartella registrazioni"
+	"openRecordingsFolder": "Apri cartella registrazioni",
+	"recoveredRecordings": {
+		"toastSingular": "Recuperata 1 registrazione interrotta",
+		"toastPlural": "Recuperate {{count}} registrazioni interrotte"
+	}
 }

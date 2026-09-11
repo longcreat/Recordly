@@ -149,5 +149,9 @@
 		"expand": "展開時間軸",
 		"collapse": "摺疊時間軸"
 	},
-	"openRecordingsFolder": "打開錄製資料夾"
+	"openRecordingsFolder": "打開錄製資料夾",
+	"recoveredRecordings": {
+		"toastSingular": "已復原 1 個中斷的錄製",
+		"toastPlural": "已復原 {{count}} 個中斷的錄製"
+	}
 }

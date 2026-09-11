@@ -25,6 +25,7 @@ import {
 	killWindowsCaptureProcess,
 	registerIpcHandlers,
 } from "./ipc/handlers";
+import { recoverInterruptedWindowsRecordings } from "./ipc/recording/recover";
 import { ensureMediaServer } from "./mediaServer";
 import { hardenWebContentsNavigation, shouldHardenWebContentsType } from "./navigationPolicy";
 import { shouldGrantDisplayCapture, shouldGrantMediaPermission } from "./permissionPolicy";
@@ -1024,6 +1025,14 @@ app.whenReady().then(async () => {
 			}
 		},
 	);
+
+	// Relocate any Windows recording orphaned by a previous crash/kill before the editor mounts and
+	// queries for it. In the common case (no orphans) this is a single temp readdir.
+	try {
+		await recoverInterruptedWindowsRecordings();
+	} catch (error) {
+		console.warn("[recover] Interrupted recording recovery failed:", error);
+	}
 
 	if (IS_SMOKE_EXPORT || process.env.RECORDLY_DEV_OPEN_RECORDING_INPUT) {
 		await logSmokeExportGpuDiagnostics();

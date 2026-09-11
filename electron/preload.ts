@@ -757,6 +757,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	getCurrentVideoPath: () => {
 		return ipcRenderer.invoke("get-current-video-path");
 	},
+	getRecoveredRecordings: () => {
+		return ipcRenderer.invoke("get-recovered-recordings");
+	},
 	clearCurrentVideoPath: () => {
 		return ipcRenderer.invoke("clear-current-video-path");
 	},

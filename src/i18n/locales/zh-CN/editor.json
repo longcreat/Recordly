@@ -149,5 +149,9 @@
 		"expand": "展开时间轴",
 		"collapse": "折叠时间轴"
 	},
-	"openRecordingsFolder": "打开录制文件夹"
+	"openRecordingsFolder": "打开录制文件夹",
+	"recoveredRecordings": {
+		"toastSingular": "已恢复 1 个中断的录制",
+		"toastPlural": "已恢复 {{count}} 个中断的录制"
+	}
 }

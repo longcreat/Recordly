@@ -149,5 +149,9 @@
 		"expand": "Развернуть таймлайн",
 		"collapse": "Свернуть таймлайн"
 	},
-	"openRecordingsFolder": "Открыть папку с записями"
+	"openRecordingsFolder": "Открыть папку с записями",
+	"recoveredRecordings": {
+		"toastSingular": "Восстановлена 1 прерванная запись",
+		"toastPlural": "Восстановлено прерванных записей: {{count}}"
+	}
 }

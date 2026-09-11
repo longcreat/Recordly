@@ -149,5 +149,9 @@
 		"expand": "Développer la timeline",
 		"collapse": "Réduire la timeline"
 	},
-	"openRecordingsFolder": "Ouvrir le dossier des enregistrements"
+	"openRecordingsFolder": "Ouvrir le dossier des enregistrements",
+	"recoveredRecordings": {
+		"toastSingular": "1 enregistrement interrompu a été restauré",
+		"toastPlural": "{{count}} enregistrements interrompus ont été restaurés"
+	}
 }
