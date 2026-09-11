@@ -1957,7 +1957,7 @@ export async function getExportHardwareInfo(): Promise<ExportHardwareInfo> {
 		gpus: [],
 	};
 	try {
-		sanitizedGpuInfo = sanitizeExportGpuInfo(await app.getGPUInfo("basic"));
+		sanitizedGpuInfo = sanitizeExportGpuInfo(await app.getGPUInfo("complete"));
 	} catch {
 		// Hardware diagnostics are best effort and must not affect exporting.
 	}

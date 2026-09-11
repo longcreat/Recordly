@@ -459,6 +459,7 @@ describe("export hardware diagnostics", () => {
 
 		const hardware = await getExportHardwareInfo();
 
+		expect(electronAppMock.getGPUInfo).toHaveBeenCalledWith("complete");
 		expect(hardware).toMatchObject({
 			platform: process.platform,
 			arch: process.arch,
