@@ -33,10 +33,10 @@
     },
     "window-bounds": {
       "binaryName": "window-bounds.exe",
-      "binarySha256": "385a560fdac21581f3bdc92b011e009dafe6d8e21e3ab8bf1f51c6cf35c04e10",
+      "binarySha256": "d408dd10717657c52fe6a5c37a18c306bae1b59c778b422bac778d3377315bb7",
       "sourceDir": "electron/native/window-bounds",
       "sourceFingerprint": "95fc80504dcdf16b560445291e666a5d247fe92ab7eb6c67d6a8c916aa68aa5a",
-      "updatedAt": "2026-09-05T15:50:50.665Z"
+      "updatedAt": "2026-09-11T03:59:14.181Z"
     }
   }
 }
