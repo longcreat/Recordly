@@ -984,6 +984,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		systemAudioEnabled?: boolean;
 		webcamEnabled?: boolean;
 		webcamDeviceId?: string;
+		frameRate?: 24 | 30 | 60;
 	}) => ipcRenderer.invoke("set-recording-preferences", prefs),
 	getCountdownDelay: () => ipcRenderer.invoke("get-countdown-delay"),
 	setCountdownDelay: (delay: number) => ipcRenderer.invoke("set-countdown-delay", delay),

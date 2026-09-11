@@ -72,6 +72,8 @@ function LaunchWindowContent() {
 		setMicrophoneDeviceId,
 		systemAudioEnabled,
 		setSystemAudioEnabled,
+		frameRate,
+		persistFrameRate,
 		webcamEnabled,
 		setWebcamEnabled,
 		webcamDeviceId,
@@ -378,6 +380,8 @@ function LaunchWindowContent() {
 				supportsHudCaptureProtection={hudCaptureProtectionSupported}
 				hideHudFromCapture={hideHudFromCapture}
 				recordingsDirectory={recordingsDirectory}
+				frameRate={frameRate}
+				persistFrameRate={persistFrameRate}
 				onToggleHudCaptureProtection={() => {
 					void toggleHudCaptureProtection();
 				}}

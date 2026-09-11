@@ -9,7 +9,11 @@ import {
 	selectWebcamRecordingMimeType,
 } from "./recordingMimeType";
 
-const TARGET_FRAME_RATE = 60;
+export type ScreenRecorderFrameRate = 24 | 30 | 60;
+
+const resolveFrameRate = (raw: unknown): ScreenRecorderFrameRate =>
+	raw === 24 || raw === 30 ? raw : 60;
+
 const TARGET_WIDTH = 3840;
 const TARGET_HEIGHT = 2160;
 const FOUR_K_PIXELS = TARGET_WIDTH * TARGET_HEIGHT;
@@ -143,6 +147,8 @@ type UseScreenRecorderReturn = {
 	setMicrophoneDeviceId: (deviceId: string | undefined) => void;
 	systemAudioEnabled: boolean;
 	setSystemAudioEnabled: (enabled: boolean) => void;
+	frameRate: ScreenRecorderFrameRate;
+	persistFrameRate: (rate: ScreenRecorderFrameRate) => void;
 	webcamEnabled: boolean;
 	setWebcamEnabled: (enabled: boolean) => void;
 	webcamDeviceId: string | undefined;
@@ -386,6 +392,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [webcamEnabled, setWebcamEnabled] = useState(false);
 	const [webcamDeviceId, setWebcamDeviceId] = useState<string | undefined>(undefined);
 	const [countdownDelay, setCountdownDelayState] = useState(3);
+	const [frameRate, setFrameRate] = useState<ScreenRecorderFrameRate>(60);
+	const frameRateRef = useRef<ScreenRecorderFrameRate>(60);
 	const mediaRecorder = useRef<MediaRecorder | null>(null);
 	const webcamRecorder = useRef<MediaRecorder | null>(null);
 	const stream = useRef<MediaStream | null>(null);
@@ -598,7 +606,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const computeBitrate = (width: number, height: number) => {
 		const pixels = width * height;
 		const highFrameRateBoost =
-			TARGET_FRAME_RATE >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
+			frameRateRef.current >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
 
 		if (pixels >= FOUR_K_PIXELS) {
 			return Math.round(BITRATE_4K * highFrameRateBoost);
@@ -1537,6 +1545,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				if (result.webcamDeviceId) {
 					setWebcamDeviceId(result.webcamDeviceId);
 				}
+				setFrameRate(resolveFrameRate(result.frameRate));
 			}
 		})();
 	}, []);
@@ -1555,6 +1564,15 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setSystemAudioEnabled(enabled);
 		void window.electronAPI.setRecordingPreferences({ systemAudioEnabled: enabled });
 	}, []);
+
+	const persistFrameRate = useCallback((rate: ScreenRecorderFrameRate) => {
+		setFrameRate(rate);
+		void window.electronAPI.setRecordingPreferences({ frameRate: rate });
+	}, []);
+
+	useEffect(() => {
+		frameRateRef.current = frameRate;
+	}, [frameRate]);
 
 	const persistWebcamEnabled = useCallback((enabled: boolean) => {
 		setWebcamEnabled(enabled);
@@ -1963,8 +1981,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					chromeMediaSourceId: browserCaptureSource.id,
 					maxWidth: TARGET_WIDTH,
 					maxHeight: TARGET_HEIGHT,
-					maxFrameRate: TARGET_FRAME_RATE,
-					minFrameRate: MIN_FRAME_RATE,
+					maxFrameRate: frameRateRef.current,
+					minFrameRate: Math.min(MIN_FRAME_RATE, frameRateRef.current),
 					googCaptureCursor: browserCursorPolicy.streamCursor === "always",
 				},
 				cursor: browserCursorPolicy.streamCursor,
@@ -1979,7 +1997,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 							displaySurface: "monitor",
 							width: { ideal: TARGET_WIDTH, max: TARGET_WIDTH },
 							height: { ideal: TARGET_HEIGHT, max: TARGET_HEIGHT },
-							frameRate: { ideal: TARGET_FRAME_RATE, max: TARGET_FRAME_RATE },
+							frameRate: { ideal: frameRateRef.current, max: frameRateRef.current },
 							cursor: browserCursorPolicy.streamCursor,
 						},
 						selfBrowserSurface: "exclude",
@@ -2090,7 +2108,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 									: "monitor",
 								width: { ideal: TARGET_WIDTH, max: TARGET_WIDTH },
 								height: { ideal: TARGET_HEIGHT, max: TARGET_HEIGHT },
-								frameRate: { ideal: TARGET_FRAME_RATE, max: TARGET_FRAME_RATE },
+								frameRate: {
+									ideal: frameRateRef.current,
+									max: frameRateRef.current,
+								},
 								cursor: browserCursorPolicy.streamCursor,
 							},
 							selfBrowserSurface: "exclude",
@@ -2111,7 +2132,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 			try {
 				await videoTrack.applyConstraints({
-					frameRate: { ideal: TARGET_FRAME_RATE, max: TARGET_FRAME_RATE },
+					frameRate: { ideal: frameRateRef.current, max: frameRateRef.current },
 					width: { ideal: TARGET_WIDTH, max: TARGET_WIDTH },
 					height: { ideal: TARGET_HEIGHT, max: TARGET_HEIGHT },
 				} as MediaTrackConstraints);
@@ -2125,7 +2146,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			let {
 				width = DEFAULT_WIDTH,
 				height = DEFAULT_HEIGHT,
-				frameRate = TARGET_FRAME_RATE,
+				frameRate = frameRateRef.current,
 			} = videoTrack.getSettings();
 
 			width = Math.floor(width / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
@@ -2135,7 +2156,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			const mimeType = selectMimeType();
 
 			console.log(
-				`Recording at ${width}x${height} @ ${frameRate ?? TARGET_FRAME_RATE}fps using ${mimeType ?? "browser default"} / ${Math.round(
+				`Recording at ${width}x${height} @ ${frameRate ?? frameRateRef.current}fps using ${mimeType ?? "browser default"} / ${Math.round(
 					videoBitsPerSecond / BITS_PER_MEGABIT,
 				)} Mbps`,
 			);
@@ -2440,6 +2461,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setMicrophoneDeviceId: persistMicrophoneDeviceId,
 		systemAudioEnabled,
 		setSystemAudioEnabled: persistSystemAudioEnabled,
+		frameRate,
+		persistFrameRate,
 		webcamEnabled,
 		setWebcamEnabled: persistWebcamEnabled,
 		webcamDeviceId,

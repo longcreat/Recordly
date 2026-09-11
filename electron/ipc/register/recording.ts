@@ -18,7 +18,7 @@ import {
 	getHudOverlayCaptureProtectionEnabled,
 	reassertHudOverlayCaptureProtection,
 } from "../../windows";
-import { ALLOW_RECORDLY_WINDOW_CAPTURE } from "../constants";
+import { ALLOW_RECORDLY_WINDOW_CAPTURE, RECORDINGS_SETTINGS_FILE } from "../constants";
 import { startWindowBoundsCapture, stopWindowBoundsCapture } from "../cursor/bounds";
 import { startInteractionCapture, stopInteractionCapture } from "../cursor/interaction";
 import { startNativeCursorMonitor, stopNativeCursorMonitor } from "../cursor/monitor";
@@ -65,6 +65,7 @@ import {
 	waitForFfmpegCaptureStart,
 	waitForFfmpegCaptureStop,
 } from "../recording/ffmpeg";
+import { resolveRecordingFrameRate } from "../recording/frameRatePreference";
 import {
 	attachNativeCaptureLifecycle,
 	finalizeStoredVideo,
@@ -87,6 +88,7 @@ import {
 	shouldStartWindowsBrowserMicrophoneFallback,
 	shouldUseWindowsBrowserMicrophoneFallback,
 } from "../recording/windowsFallbacks";
+import { createRecordingPreferencesStore } from "../settings/recordingPreferencesStore";
 import {
 	cachedSystemCursorAssets,
 	cachedSystemCursorAssetsSourceMtimeMs,
@@ -158,6 +160,8 @@ import {
 import { resolveWindowsCaptureTarget } from "../windowsCaptureSelection";
 
 const execFileAsync = promisify(execFile);
+
+const recordingPreferencesReader = createRecordingPreferencesStore(RECORDINGS_SETTINGS_FILE);
 
 async function writeWindowsRecordingDiagnostics(
 	videoPath: string | null | undefined,
@@ -443,6 +447,8 @@ export function registerRecordingHandlers(
 				try {
 					const exePath = getWindowsCaptureExePath();
 					const recordingsDir = await getRecordingsDir();
+					const prefs = await recordingPreferencesReader.read();
+					const frameRate = resolveRecordingFrameRate(prefs.frameRate);
 					const timestamp = Date.now();
 					const outputPath = path.join(recordingsDir, `recording-${timestamp}.mp4`);
 					tempVideoPath = path.join(
@@ -468,7 +474,7 @@ export function registerRecordingHandlers(
 
 					const config: Record<string, unknown> = {
 						outputPath: tempVideoPath,
-						fps: 60,
+						fps: frameRate,
 					};
 
 					if (captureTarget.kind === "invalid-window") {
@@ -729,6 +735,8 @@ export function registerRecordingHandlers(
 				}
 
 				const helperPath = await ensureNativeCaptureHelperBinary();
+				const prefs = await recordingPreferencesReader.read();
+				const frameRate = resolveRecordingFrameRate(prefs.frameRate);
 				const timestamp = Date.now();
 				const outputPath = path.join(recordingsDir, `recording-${timestamp}.mp4`);
 				const capturesSystemAudio = Boolean(options?.capturesSystemAudio);
@@ -740,7 +748,7 @@ export function registerRecordingHandlers(
 					? path.join(recordingsDir, `recording-${timestamp}.mic.m4a`)
 					: null;
 				const config: Record<string, unknown> = {
-					fps: 60,
+					fps: frameRate,
 					outputPath,
 					capturesSystemAudio,
 					capturesMicrophone,

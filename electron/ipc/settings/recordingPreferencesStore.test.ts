@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRecordingPreferencesStore } from "./recordingPreferencesStore";
 
 vi.mock("electron", () => ({
@@ -42,5 +42,39 @@ describe("recording preferences store", () => {
 			webcamEnabled: true,
 			webcamDeviceId: "preferred-camera",
 		});
+	});
+});
+
+describe("createRecordingPreferencesStore frameRate", () => {
+	let tempRoot: string;
+	let settingsFile: string;
+
+	beforeEach(async () => {
+		tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "recordly-prefs-"));
+		settingsFile = path.join(tempRoot, "recordings-settings.json");
+	});
+
+	afterEach(async () => {
+		await fs.rm(tempRoot, { recursive: true, force: true });
+	});
+
+	it("round-trips frameRate through read/update", async () => {
+		const store = createRecordingPreferencesStore(settingsFile);
+		await store.update({ frameRate: 30 });
+		const parsed = await store.read();
+		expect(parsed.frameRate).toBe(30);
+	});
+
+	it("merges frameRate into existing preferences without wiping them", async () => {
+		await fs.writeFile(
+			settingsFile,
+			JSON.stringify({ microphoneEnabled: true, frameRate: 60 }, null, 2),
+			"utf-8",
+		);
+		const store = createRecordingPreferencesStore(settingsFile);
+		await store.update({ frameRate: 24 });
+		const parsed = await store.read();
+		expect(parsed.frameRate).toBe(24);
+		expect(parsed.microphoneEnabled).toBe(true);
 	});
 });

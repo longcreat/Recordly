@@ -1,6 +1,7 @@
 import {
 	EyeIcon,
 	EyeSlashIcon,
+	FilmSlateIcon,
 	FolderOpenIcon,
 	TranslateIcon,
 	VideoCameraIcon,
@@ -14,6 +15,7 @@ import type { ReactElement } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useScopedT } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import type { ScreenRecorderFrameRate } from "@/hooks/useScreenRecorder";
 import type { AppLocale } from "@/i18n/config";
 import { SUPPORTED_LOCALES } from "@/i18n/config";
 import styles from "../LaunchWindow.module.css";
@@ -21,6 +23,8 @@ import { useLaunchPopoverCoordinator } from "./LaunchPopoverCoordinator";
 import { DropdownItem, HudPopover } from "./PopoverScaffold";
 
 const POPOVER_ID = "more";
+
+const RECORDING_FRAME_RATE_OPTIONS: readonly ScreenRecorderFrameRate[] = [24, 30, 60] as const;
 
 const LOCALE_LABELS: Record<string, string> = {
 	en: "English",
@@ -39,6 +43,8 @@ export function MorePopover({
 	supportsHudCaptureProtection,
 	hideHudFromCapture,
 	recordingsDirectory,
+	frameRate,
+	persistFrameRate,
 	onToggleHudCaptureProtection,
 	onChooseRecordingsDirectory,
 	onOpenRecordingsFolder,
@@ -52,6 +58,8 @@ export function MorePopover({
 	supportsHudCaptureProtection: boolean;
 	hideHudFromCapture: boolean;
 	recordingsDirectory?: string | null;
+	frameRate: ScreenRecorderFrameRate;
+	persistFrameRate: (rate: ScreenRecorderFrameRate) => void;
 	onToggleHudCaptureProtection: () => void;
 	onChooseRecordingsDirectory: () => void;
 	onOpenRecordingsFolder?: () => void;
@@ -159,6 +167,21 @@ export function MorePopover({
 					{t("recording.previewUpdateUi", "Preview Update UI")}
 				</DropdownItem>
 			) : null}
+			<div className={styles.ddLabel} style={{ marginTop: 4 }}>
+				{t("recording.frameRate")}
+			</div>
+			{RECORDING_FRAME_RATE_OPTIONS.map((rate) => (
+				<DropdownItem
+					key={rate}
+					icon={<FilmSlateIcon size={16} />}
+					selected={frameRate === rate}
+					onClick={() => {
+						persistFrameRate(rate);
+					}}
+				>
+					{t(`recording.frameRate${rate}`)}
+				</DropdownItem>
+			))}
 			<div className={styles.ddLabel} style={{ marginTop: 4 }}>
 				{t("recording.appearance", "Appearance")}
 			</div>
