@@ -157,6 +157,13 @@ interface VideoExporterConfig extends ExportConfig {
 	preferredEncoderPath?: SupportedMp4EncoderPath | null;
 }
 
+interface ExportRuntimeDiagnostics {
+	appVersion?: string;
+	userAgent?: string;
+	logicalProcessors?: number;
+	deviceMemoryGb?: number;
+}
+
 type NativeAudioPlan =
 	| {
 			audioMode: "none";
@@ -365,6 +372,7 @@ export class ModernVideoExporter {
 	private displayedRenderFps = 0;
 	private sourceVideoInfo: DecodedVideoInfo | null = null;
 	private mediaSourceRetryAttempted = false;
+	private runtimeDiagnostics: ExportRuntimeDiagnostics = {};
 
 	constructor(config: VideoExporterConfig) {
 		this.config = config;
@@ -374,6 +382,7 @@ export class ModernVideoExporter {
 		let useFallbackMediaSource = false;
 		let retriedWithFallbackMediaSource = false;
 		this.mediaSourceRetryAttempted = false;
+		this.runtimeDiagnostics = await this.collectRuntimeDiagnostics();
 
 		while (true) {
 			let shouldRetryWithFallbackMediaSource = false;
@@ -967,6 +976,36 @@ export class ModernVideoExporter {
 		return normalizeLightningRuntimePlatform(navigator.platform || navigator.userAgent || "");
 	}
 
+	private async collectRuntimeDiagnostics(): Promise<ExportRuntimeDiagnostics> {
+		const diagnostics: ExportRuntimeDiagnostics = {};
+		if (typeof navigator !== "undefined") {
+			const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
+			if (navigator.userAgent) diagnostics.userAgent = navigator.userAgent;
+			if (navigator.hardwareConcurrency > 0) {
+				diagnostics.logicalProcessors = navigator.hardwareConcurrency;
+			}
+			if (
+				typeof navigatorWithMemory.deviceMemory === "number" &&
+				navigatorWithMemory.deviceMemory > 0
+			) {
+				diagnostics.deviceMemoryGb = navigatorWithMemory.deviceMemory;
+			}
+		}
+
+		try {
+			if (
+				typeof window !== "undefined" &&
+				typeof window.electronAPI?.getAppVersion === "function"
+			) {
+				diagnostics.appVersion = await window.electronAPI.getAppVersion();
+			}
+		} catch {
+			// Environment diagnostics must never prevent an export attempt.
+		}
+
+		return diagnostics;
+	}
+
 	private getLightningErrorGuidance(message: string): string[] {
 		const guidance = new Set<string>();
 		const platform = this.getPlatformLabel();
@@ -1045,12 +1084,35 @@ export class ModernVideoExporter {
 			`Reason: ${message}`,
 			`Platform: ${this.getPlatformLabel()}`,
 			`Requested backend mode: ${this.config.backendPreference ?? "auto"}`,
-			`Output: ${this.config.width}x${this.config.height} @ ${this.config.frameRate} FPS`,
+			`Output: ${this.config.width}x${this.config.height} @ ${this.config.frameRate} FPS; ${(this.config.bitrate / 1_000_000).toFixed(2)} Mbps; mode=${this.config.encodingMode ?? "default"}`,
 		];
+
+		if (this.runtimeDiagnostics.appVersion) {
+			lines.push(`Recordly version: ${this.runtimeDiagnostics.appVersion}`);
+		}
+		if (this.runtimeDiagnostics.userAgent) {
+			lines.push(`Runtime: ${this.runtimeDiagnostics.userAgent}`);
+		}
+		const hardwareParts = [
+			this.runtimeDiagnostics.logicalProcessors
+				? `${this.runtimeDiagnostics.logicalProcessors} logical processors`
+				: null,
+			this.runtimeDiagnostics.deviceMemoryGb
+				? `${this.runtimeDiagnostics.deviceMemoryGb} GB device memory`
+				: null,
+		].filter((value): value is string => Boolean(value));
+		if (hardwareParts.length > 0) {
+			lines.push(`Hardware capacity: ${hardwareParts.join("; ")}`);
+		}
 
 		if (this.sourceVideoInfo) {
 			lines.push(
 				`Source: ${this.sourceVideoInfo.codec} ${this.sourceVideoInfo.width}x${this.sourceVideoInfo.height} @ ${this.sourceVideoInfo.frameRate.toFixed(3)} FPS; ${this.sourceVideoInfo.duration.toFixed(3)}s`,
+			);
+			lines.push(
+				this.sourceVideoInfo.hasAudio
+					? `Source audio: ${this.sourceVideoInfo.audioCodec ?? "unknown codec"}${this.sourceVideoInfo.audioSampleRate ? ` @ ${this.sourceVideoInfo.audioSampleRate} Hz` : ""}`
+					: "Source audio: none",
 			);
 		}
 
@@ -1059,8 +1121,13 @@ export class ModernVideoExporter {
 				0,
 				(this.getNowMs() - this.totalExportStartTimeMs) / 1000,
 			);
+			const expectedFrames = Math.ceil(this.effectiveDurationSec * this.config.frameRate);
+			const progressSuffix =
+				expectedFrames > 0
+					? `/${expectedFrames} (${Math.min(100, (this.processedFrameCount / expectedFrames) * 100).toFixed(1)}%)`
+					: "";
 			lines.push(
-				`Progress at failure: ${this.processedFrameCount} rendered frames after ${elapsedSeconds.toFixed(2)}s`,
+				`Progress at failure: ${this.processedFrameCount}${progressSuffix} rendered frames after ${elapsedSeconds.toFixed(2)}s`,
 			);
 		}
 
@@ -1075,6 +1142,12 @@ export class ModernVideoExporter {
 		if (resolvedEncodePath) {
 			lines.push(
 				`Encoder path: ${resolvedEncodePath}${this.encoderName ? ` (${this.encoderName})` : ""}`,
+			);
+		}
+
+		if (this.backpressureProfile) {
+			lines.push(
+				`Pipeline tuning: ${this.backpressureProfile.name}; decode queue=${this.config.maxDecodeQueue ?? this.backpressureProfile.maxDecodeQueue}; pending frames=${this.config.maxPendingFrames ?? this.backpressureProfile.maxPendingFrames}; encode queue=${this.config.maxEncodeQueue ?? this.backpressureProfile.maxEncodeQueue}`,
 			);
 		}
 

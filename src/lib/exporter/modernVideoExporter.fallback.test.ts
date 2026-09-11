@@ -311,6 +311,19 @@ describe("ModernVideoExporter native fallback routing", () => {
 			processedFrameCount: number;
 			totalExportStartTimeMs: number;
 			mediaSourceRetryAttempted: boolean;
+			effectiveDurationSec: number;
+			runtimeDiagnostics: {
+				appVersion: string;
+				userAgent: string;
+				logicalProcessors: number;
+				deviceMemoryGb: number;
+			};
+			backpressureProfile: {
+				name: string;
+				maxDecodeQueue: number;
+				maxPendingFrames: number;
+				maxEncodeQueue: number;
+			};
 		};
 		exporter.sourceVideoInfo = mocks.videoInfo;
 		exporter.renderBackend = "webgpu";
@@ -319,6 +332,19 @@ describe("ModernVideoExporter native fallback routing", () => {
 		exporter.processedFrameCount = 314;
 		exporter.totalExportStartTimeMs = 1;
 		exporter.mediaSourceRetryAttempted = true;
+		exporter.effectiveDurationSec = 10;
+		exporter.runtimeDiagnostics = {
+			appVersion: "1.4.0",
+			userAgent: "RecordlyTest/1.0 Electron/43.1.0",
+			logicalProcessors: 12,
+			deviceMemoryGb: 8,
+		};
+		exporter.backpressureProfile = {
+			name: "webcodecs-balanced-plus",
+			maxDecodeQueue: 12,
+			maxPendingFrames: 32,
+			maxEncodeQueue: 72,
+		};
 
 		const report = exporter.buildLightningExportError(
 			new Error(
@@ -328,9 +354,17 @@ describe("ModernVideoExporter native fallback routing", () => {
 
 		expect(report).toContain("Failure code: VIDEO_DECODE_ENCODING_ERROR");
 		expect(report).toContain("Failure stage: Input video decoding");
+		expect(report).toContain("Output: 1200x570 @ 60 FPS; 8.00 Mbps; mode=default");
+		expect(report).toContain("Recordly version: 1.4.0");
+		expect(report).toContain("Runtime: RecordlyTest/1.0 Electron/43.1.0");
+		expect(report).toContain("Hardware capacity: 12 logical processors; 8 GB device memory");
 		expect(report).toContain("Source: h264 1920x1080 @ 30.000 FPS; 1.000s");
-		expect(report).toContain("Progress at failure: 314 rendered frames after");
+		expect(report).toContain("Source audio: none");
+		expect(report).toContain("Progress at failure: 314/600 (52.3%) rendered frames after");
 		expect(report).toContain("Media source retry: attempted with a fresh source");
+		expect(report).toContain(
+			"Pipeline tuning: webcodecs-balanced-plus; decode queue=12; pending frames=32; encode queue=72",
+		);
 		expect(report).toContain("If only this recording fails");
 		expect(report).not.toContain("Windows Lightning exports can use WebCodecs or FFmpeg");
 	});

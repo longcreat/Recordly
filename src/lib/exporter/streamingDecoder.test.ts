@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	buildVideoDecodeFailure,
 	getDecodedFrameStartupOffsetUs,
@@ -91,6 +91,7 @@ const {
 	mockDemuxerGetMediaInfo,
 	mockDemuxerDestroy,
 	mockDemuxerGetDecoderConfig,
+	mockDemuxerRead,
 } = vi.hoisted(() => ({
 	mockDemuxerLoad: vi.fn(),
 	mockDemuxerGetMediaInfo: vi.fn(async () => ({
@@ -110,6 +111,7 @@ const {
 	})),
 	mockDemuxerDestroy: vi.fn(),
 	mockDemuxerGetDecoderConfig: vi.fn(),
+	mockDemuxerRead: vi.fn(),
 }));
 
 vi.mock("web-demuxer", () => ({
@@ -118,6 +120,7 @@ vi.mock("web-demuxer", () => ({
 		getMediaInfo = mockDemuxerGetMediaInfo;
 		destroy = mockDemuxerDestroy;
 		getDecoderConfig = mockDemuxerGetDecoderConfig;
+		read = mockDemuxerRead;
 	},
 }));
 
@@ -126,6 +129,80 @@ const mockGetLocalMediaUrl = vi.fn(async (filePath: string) => ({
 	success: true,
 	url: `http://127.0.0.1:4321/video?path=${encodeURIComponent(filePath)}`,
 }));
+
+describe("StreamingVideoDecoder decode failures", () => {
+	beforeEach(() => {
+		vi.restoreAllMocks();
+		mockDemuxerLoad.mockResolvedValue(undefined);
+		mockDemuxerGetDecoderConfig.mockResolvedValue({
+			codec: "avc1.640034",
+			codedWidth: 1920,
+			codedHeight: 1080,
+		});
+		mockDemuxerRead.mockReturnValue(
+			new ReadableStream({
+				start(controller) {
+					controller.enqueue({
+						type: "key",
+						timestamp: 0,
+						duration: 33_333,
+						byteLength: 4,
+					});
+					controller.close();
+				},
+			}),
+		);
+		Object.assign(globalThis, {
+			window: {
+				location: { href: "http://localhost:5173/" },
+				electronAPI: {
+					readLocalFile: mockReadLocalFile,
+					getLocalMediaUrl: mockGetLocalMediaUrl,
+				},
+			},
+		});
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("does not emit frozen remaining frames after a decoder error", async () => {
+		const frame = { timestamp: 0, close: vi.fn() } as unknown as VideoFrame;
+		class FailingVideoDecoder {
+			state: CodecState = "unconfigured";
+			decodeQueueSize = 0;
+			constructor(
+				private readonly callbacks: {
+					output: (decodedFrame: VideoFrame) => void;
+					error: (error: DOMException) => void;
+				},
+			) {}
+			configure() {
+				this.state = "configured";
+			}
+			decode() {
+				this.callbacks.output(frame);
+				this.callbacks.error(new DOMException("bad frame", "EncodingError"));
+			}
+			async flush() {}
+			close() {
+				this.state = "closed";
+			}
+		}
+		vi.stubGlobal("VideoDecoder", FailingVideoDecoder);
+
+		const decoder = new StreamingVideoDecoder();
+		await decoder.loadMetadata("/tmp/failing.mp4");
+		const onFrame = vi.fn(async () => {});
+
+		await expect(decoder.decodeAll(30, undefined, undefined, onFrame)).rejects.toThrow(
+			"[VIDEO_DECODE_ENCODING_ERROR]",
+		);
+		expect(onFrame).not.toHaveBeenCalled();
+		expect(frame.close).toHaveBeenCalledTimes(1);
+	});
+});
 
 describe("StreamingVideoDecoder local media loading", () => {
 	beforeEach(() => {

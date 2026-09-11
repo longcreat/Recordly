@@ -36,6 +36,7 @@ interface VideoDecodeFailureContext {
 	decodeQueueSize?: number;
 }
 
+/** Maps WebCodecs failures to stable support-facing identifiers. */
 export function getVideoDecodeFailureCode(error: unknown): string {
 	const name = error instanceof DOMException ? error.name : "";
 	switch (name) {
@@ -64,6 +65,7 @@ function describeUnknownError(error: unknown): string {
 	return String(error);
 }
 
+/** Builds a decode error with codec, source, chunk, and decoder-state context. */
 export function buildVideoDecodeFailure(error: unknown, context: VideoDecodeFailureContext): Error {
 	const details = [`codec=${context.decoderConfig.codec}`];
 	const failureCode = getVideoDecodeFailureCode(error);
@@ -105,6 +107,7 @@ export function buildVideoDecodeFailure(error: unknown, context: VideoDecodeFail
 	return failure;
 }
 
+/** Keeps the original decoder failure when cleanup triggers secondary errors. */
 export function preserveFirstVideoDecodeFailure(
 	existingError: Error | null,
 	error: unknown,
@@ -630,7 +633,7 @@ export class StreamingVideoDecoder {
 		}
 
 		// Flush remaining output frames for the last decoded frame.
-		if (heldFrame && segmentIdx < segments.length) {
+		if (!decodeError && heldFrame && segmentIdx < segments.length) {
 			while (!this.cancelled && segmentIdx < segments.length) {
 				const segment = segments[segmentIdx];
 				if (heldFrameSec < segment.startSec - epsilonSec) {
