@@ -56,14 +56,40 @@ const NATIVE_STATIC_LAYOUT_SOURCE_PROXY_MAX_BITRATE = 80_000_000;
 const NATIVE_STATIC_LAYOUT_SOURCE_PROXY_CONTAINERS = new Set([".mp4", ".m4v", ".mov"]);
 
 type ElectronGpuDeviceLike = {
+	active?: boolean;
 	vendorId?: number | string;
 	vendorString?: string;
 	deviceString?: string;
+	videoMemory?: number;
 };
 
 type ElectronGpuInfoLike = {
 	gpuDevice?: ElectronGpuDeviceLike[];
+	machineModelName?: string;
+	machineModelVersion?: string;
 };
+
+export interface ExportHardwareInfo {
+	platform: NodeJS.Platform;
+	release: string;
+	arch: string;
+	cpuModel: string | null;
+	logicalProcessors: number;
+	totalMemoryGb: number;
+	machineModel: string | null;
+	gpus: Array<{
+		name: string;
+		vendor: string | null;
+		active: boolean | null;
+		videoMemoryMb: number | null;
+	}>;
+	gpuFeatures: {
+		videoDecode: string | null;
+		videoEncode: string | null;
+		webgl: string | null;
+		webgpu: string | null;
+	};
+}
 
 export type NativeVideoExportSession = {
 	ffmpegProcess: ChildProcessByStdio<Writable, null, Readable>;
@@ -1867,6 +1893,99 @@ export function hasNvidiaGpuDeviceInGpuInfo(gpuInfo: unknown) {
 
 	const devices = (gpuInfo as ElectronGpuInfoLike).gpuDevice;
 	return Array.isArray(devices) && devices.some(isNvidiaGpuDevice);
+}
+
+function getGpuVendorLabel(device: ElectronGpuDeviceLike): string | null {
+	if (device.vendorString?.trim()) {
+		return device.vendorString.trim();
+	}
+
+	const rawVendorId = device.vendorId;
+	const vendorId =
+		typeof rawVendorId === "number"
+			? rawVendorId
+			: typeof rawVendorId === "string"
+				? rawVendorId.toLowerCase().startsWith("0x")
+					? Number.parseInt(rawVendorId.slice(2), 16)
+					: Number.parseInt(rawVendorId, 10)
+				: Number.NaN;
+	return (
+		{
+			[0x1002]: "AMD",
+			[0x106b]: "Apple",
+			[0x10de]: "NVIDIA",
+			[0x8086]: "Intel",
+		}[vendorId] ?? null
+	);
+}
+
+/** Reduces Electron's GPU response to support-safe hardware fields. */
+export function sanitizeExportGpuInfo(
+	gpuInfo: unknown,
+): Pick<ExportHardwareInfo, "machineModel" | "gpus"> {
+	if (!gpuInfo || typeof gpuInfo !== "object") {
+		return { machineModel: null, gpus: [] };
+	}
+
+	const info = gpuInfo as ElectronGpuInfoLike;
+	const machineModel =
+		[info.machineModelName, info.machineModelVersion]
+			.filter((value): value is string => Boolean(value?.trim()))
+			.join(" ") || null;
+	const gpus = Array.isArray(info.gpuDevice)
+		? info.gpuDevice.map((device) => {
+				const vendor = getGpuVendorLabel(device);
+				return {
+					name: device.deviceString?.trim() || vendor || "Unknown GPU",
+					vendor,
+					active: typeof device.active === "boolean" ? device.active : null,
+					videoMemoryMb:
+						typeof device.videoMemory === "number" && device.videoMemory > 0
+							? device.videoMemory
+							: null,
+				};
+			})
+		: [];
+
+	return { machineModel, gpus };
+}
+
+/** Captures sanitized hardware and GPU acceleration details for export support reports. */
+export async function getExportHardwareInfo(): Promise<ExportHardwareInfo> {
+	let sanitizedGpuInfo: Pick<ExportHardwareInfo, "machineModel" | "gpus"> = {
+		machineModel: null,
+		gpus: [],
+	};
+	try {
+		sanitizedGpuInfo = sanitizeExportGpuInfo(await app.getGPUInfo("basic"));
+	} catch {
+		// Hardware diagnostics are best effort and must not affect exporting.
+	}
+
+	let gpuFeatureStatus: Record<string, string> = {};
+	try {
+		gpuFeatureStatus = app.getGPUFeatureStatus() as unknown as Record<string, string>;
+	} catch {
+		// GPU feature status can be unavailable before Chromium finishes GPU initialization.
+	}
+
+	const cpuModel = os.cpus()[0]?.model?.replace(/\s+/g, " ").trim() || null;
+	return {
+		platform: process.platform,
+		release: os.release(),
+		arch: process.arch,
+		cpuModel,
+		logicalProcessors: os.cpus().length,
+		totalMemoryGb: Math.round((os.totalmem() / 1024 ** 3) * 10) / 10,
+		machineModel: sanitizedGpuInfo.machineModel,
+		gpus: sanitizedGpuInfo.gpus,
+		gpuFeatures: {
+			videoDecode: gpuFeatureStatus.video_decode ?? null,
+			videoEncode: gpuFeatureStatus.video_encode ?? null,
+			webgl: gpuFeatureStatus.webgl ?? null,
+			webgpu: gpuFeatureStatus.webgpu ?? null,
+		},
+	};
 }
 
 async function hasNvidiaGpuForCudaExportCandidate() {

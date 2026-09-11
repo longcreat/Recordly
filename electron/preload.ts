@@ -102,6 +102,27 @@ type NativeExportCapabilities = {
 		userOptInRequired: boolean;
 	};
 };
+type ExportHardwareInfo = {
+	platform: NodeJS.Platform;
+	release: string;
+	arch: string;
+	cpuModel: string | null;
+	logicalProcessors: number;
+	totalMemoryGb: number;
+	machineModel: string | null;
+	gpus: Array<{
+		name: string;
+		vendor: string | null;
+		active: boolean | null;
+		videoMemoryMb: number | null;
+	}>;
+	gpuFeatures: {
+		videoDecode: string | null;
+		videoEncode: string | null;
+		webgl: string | null;
+		webgpu: string | null;
+	};
+};
 
 const nativeVideoExportWriteRequests = new Map<
 	number,
@@ -217,6 +238,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return ipcRenderer.invoke("get-native-export-capabilities") as Promise<{
 			success: boolean;
 			capabilities?: NativeExportCapabilities;
+			error?: string;
+		}>;
+	},
+	getExportHardwareInfo: () => {
+		return ipcRenderer.invoke("get-export-hardware-info") as Promise<{
+			success: boolean;
+			hardware?: ExportHardwareInfo;
 			error?: string;
 		}>;
 	},

@@ -162,6 +162,7 @@ interface ExportRuntimeDiagnostics {
 	userAgent?: string;
 	logicalProcessors?: number;
 	deviceMemoryGb?: number;
+	hardware?: RendererExportHardwareInfo;
 }
 
 type NativeAudioPlan =
@@ -1003,6 +1004,20 @@ export class ModernVideoExporter {
 			// Environment diagnostics must never prevent an export attempt.
 		}
 
+		try {
+			if (
+				typeof window !== "undefined" &&
+				typeof window.electronAPI?.getExportHardwareInfo === "function"
+			) {
+				const result = await window.electronAPI.getExportHardwareInfo();
+				if (result.success && result.hardware) {
+					diagnostics.hardware = result.hardware;
+				}
+			}
+		} catch {
+			// Environment diagnostics must never prevent an export attempt.
+		}
+
 		return diagnostics;
 	}
 
@@ -1093,16 +1108,52 @@ export class ModernVideoExporter {
 		if (this.runtimeDiagnostics.userAgent) {
 			lines.push(`Runtime: ${this.runtimeDiagnostics.userAgent}`);
 		}
-		const hardwareParts = [
-			this.runtimeDiagnostics.logicalProcessors
-				? `${this.runtimeDiagnostics.logicalProcessors} logical processors`
-				: null,
-			this.runtimeDiagnostics.deviceMemoryGb
-				? `${this.runtimeDiagnostics.deviceMemoryGb} GB device memory`
-				: null,
-		].filter((value): value is string => Boolean(value));
-		if (hardwareParts.length > 0) {
-			lines.push(`Hardware capacity: ${hardwareParts.join("; ")}`);
+		const hardware = this.runtimeDiagnostics.hardware;
+		if (hardware) {
+			lines.push(
+				`System: ${hardware.platform} ${hardware.release} (${hardware.arch})${hardware.machineModel ? `; model=${hardware.machineModel}` : ""}`,
+			);
+			lines.push(
+				`CPU: ${hardware.cpuModel ?? "Unknown"}; ${hardware.logicalProcessors} logical processors`,
+			);
+			lines.push(`Memory: ${hardware.totalMemoryGb} GB`);
+			for (const [index, gpu] of hardware.gpus.entries()) {
+				const details = [
+					gpu.vendor && !gpu.name.toLowerCase().includes(gpu.vendor.toLowerCase())
+						? `vendor=${gpu.vendor}`
+						: null,
+					gpu.videoMemoryMb ? `VRAM=${gpu.videoMemoryMb} MB` : null,
+					gpu.active === true ? "active" : gpu.active === false ? "inactive" : null,
+				].filter((value): value is string => Boolean(value));
+				lines.push(
+					`GPU ${index + 1}: ${gpu.name}${details.length ? `; ${details.join("; ")}` : ""}`,
+				);
+			}
+			const gpuFeatures = [
+				hardware.gpuFeatures.videoDecode
+					? `video decode=${hardware.gpuFeatures.videoDecode}`
+					: null,
+				hardware.gpuFeatures.videoEncode
+					? `video encode=${hardware.gpuFeatures.videoEncode}`
+					: null,
+				hardware.gpuFeatures.webgl ? `WebGL=${hardware.gpuFeatures.webgl}` : null,
+				hardware.gpuFeatures.webgpu ? `WebGPU=${hardware.gpuFeatures.webgpu}` : null,
+			].filter((value): value is string => Boolean(value));
+			if (gpuFeatures.length > 0) {
+				lines.push(`GPU acceleration: ${gpuFeatures.join("; ")}`);
+			}
+		} else {
+			const hardwareParts = [
+				this.runtimeDiagnostics.logicalProcessors
+					? `${this.runtimeDiagnostics.logicalProcessors} logical processors`
+					: null,
+				this.runtimeDiagnostics.deviceMemoryGb
+					? `${this.runtimeDiagnostics.deviceMemoryGb} GB device memory`
+					: null,
+			].filter((value): value is string => Boolean(value));
+			if (hardwareParts.length > 0) {
+				lines.push(`Hardware capacity: ${hardwareParts.join("; ")}`);
+			}
 		}
 
 		if (this.sourceVideoInfo) {

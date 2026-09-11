@@ -317,6 +317,7 @@ describe("ModernVideoExporter native fallback routing", () => {
 				userAgent: string;
 				logicalProcessors: number;
 				deviceMemoryGb: number;
+				hardware: RendererExportHardwareInfo;
 			};
 			backpressureProfile: {
 				name: string;
@@ -338,6 +339,29 @@ describe("ModernVideoExporter native fallback routing", () => {
 			userAgent: "RecordlyTest/1.0 Electron/43.1.0",
 			logicalProcessors: 12,
 			deviceMemoryGb: 8,
+			hardware: {
+				platform: "win32",
+				release: "10.0.26100",
+				arch: "x64",
+				cpuModel: "AMD Ryzen 9 7900X",
+				logicalProcessors: 24,
+				totalMemoryGb: 31.8,
+				machineModel: "Custom PC",
+				gpus: [
+					{
+						name: "NVIDIA GeForce RTX 4070",
+						vendor: "NVIDIA",
+						active: true,
+						videoMemoryMb: 12_288,
+					},
+				],
+				gpuFeatures: {
+					videoDecode: "enabled",
+					videoEncode: "enabled",
+					webgl: "enabled",
+					webgpu: "enabled",
+				},
+			},
 		};
 		exporter.backpressureProfile = {
 			name: "webcodecs-balanced-plus",
@@ -357,7 +381,13 @@ describe("ModernVideoExporter native fallback routing", () => {
 		expect(report).toContain("Output: 1200x570 @ 60 FPS; 8.00 Mbps; mode=default");
 		expect(report).toContain("Recordly version: 1.4.0");
 		expect(report).toContain("Runtime: RecordlyTest/1.0 Electron/43.1.0");
-		expect(report).toContain("Hardware capacity: 12 logical processors; 8 GB device memory");
+		expect(report).toContain("System: win32 10.0.26100 (x64); model=Custom PC");
+		expect(report).toContain("CPU: AMD Ryzen 9 7900X; 24 logical processors");
+		expect(report).toContain("Memory: 31.8 GB");
+		expect(report).toContain("GPU 1: NVIDIA GeForce RTX 4070; VRAM=12288 MB; active");
+		expect(report).toContain(
+			"GPU acceleration: video decode=enabled; video encode=enabled; WebGL=enabled; WebGPU=enabled",
+		);
 		expect(report).toContain("Source: h264 1920x1080 @ 30.000 FPS; 1.000s");
 		expect(report).toContain("Source audio: none");
 		expect(report).toContain("Progress at failure: 314/600 (52.3%) rendered frames after");

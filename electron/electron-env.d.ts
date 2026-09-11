@@ -195,6 +195,28 @@ interface RendererNativeExportCapabilities {
 	};
 }
 
+interface RendererExportHardwareInfo {
+	platform: NodeJS.Platform;
+	release: string;
+	arch: string;
+	cpuModel: string | null;
+	logicalProcessors: number;
+	totalMemoryGb: number;
+	machineModel: string | null;
+	gpus: Array<{
+		name: string;
+		vendor: string | null;
+		active: boolean | null;
+		videoMemoryMb: number | null;
+	}>;
+	gpuFeatures: {
+		videoDecode: string | null;
+		videoEncode: string | null;
+		webgl: string | null;
+		webgpu: string | null;
+	};
+}
+
 interface Window {
 	electronAPI: {
 		hudOverlaySetIgnoreMouse: (ignore: boolean) => void;
@@ -354,6 +376,11 @@ interface Window {
 		getNativeExportCapabilities: () => Promise<{
 			success: boolean;
 			capabilities?: RendererNativeExportCapabilities;
+			error?: string;
+		}>;
+		getExportHardwareInfo: () => Promise<{
+			success: boolean;
+			hardware?: RendererExportHardwareInfo;
 			error?: string;
 		}>;
 		nativeStaticLayoutExport: (options: {
