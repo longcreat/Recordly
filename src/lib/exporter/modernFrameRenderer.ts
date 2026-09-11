@@ -29,14 +29,11 @@ import type {
 import {
 	DEFAULT_WEBCAM_ROUNDNESS,
 	getDefaultCaptionFontFamily,
-	ZOOM_DEPTH_SCALES,
 } from "@/components/video-editor/types";
 import { DEFAULT_FOCUS } from "@/components/video-editor/videoPlayback/constants";
 import {
 	type CursorFollowCameraState,
-	computeCursorFollowFocus,
 	createCursorFollowCameraState,
-	SNAP_TO_EDGES_RATIO_AUTO,
 } from "@/components/video-editor/videoPlayback/cursorFollowCamera";
 import {
 	DEFAULT_CURSOR_CONFIG,
@@ -54,8 +51,9 @@ import {
 	type SpringState,
 	stepSpringValue,
 } from "@/components/video-editor/videoPlayback/motionSmoothing";
+import { getSceneEffectMetrics } from "@/components/video-editor/videoPlayback/sceneEffects";
+import { resolveSceneZoomTarget } from "@/components/video-editor/videoPlayback/sceneMotion";
 import { getWebcamMediaTargetTimeSeconds } from "@/components/video-editor/videoPlayback/webcamSync";
-import { findDominantRegion } from "@/components/video-editor/videoPlayback/zoomRegionUtils";
 import {
 	applyZoomTransform,
 	computeZoomTransform,
@@ -1338,8 +1336,13 @@ export class FrameRenderer {
 			this.backgroundContainer.addChild(this.backgroundSprite);
 
 			if (this.config.backgroundBlur > 0) {
+				const sceneEffects = getSceneEffectMetrics({
+					viewportWidth: this.config.width,
+					backgroundBlur: this.config.backgroundBlur,
+					shadowIntensity: 0,
+				});
 				this.backgroundBlurFilter = new BlurFilter();
-				this.backgroundBlurFilter.blur = this.config.backgroundBlur * 3;
+				this.backgroundBlurFilter.blur = sceneEffects.backgroundBlurPx;
 				this.backgroundBlurFilter.quality = 4;
 				this.backgroundBlurFilter.resolution = this.app?.renderer.resolution ?? 1;
 				this.backgroundBlurFilter.repeatEdgePixels = true;
@@ -1373,8 +1376,13 @@ export class FrameRenderer {
 		}
 
 		blurredCtx.save();
-		const blurPx = this.config.backgroundBlur * 3;
-		const overscan = Math.ceil(blurPx * 2);
+		const sceneEffects = getSceneEffectMetrics({
+			viewportWidth: this.config.width,
+			backgroundBlur: this.config.backgroundBlur,
+			shadowIntensity: 0,
+		});
+		const blurPx = sceneEffects.backgroundBlurPx;
+		const overscan = sceneEffects.backgroundOverscanPx;
 		blurredCtx.filter = `blur(${blurPx}px)`;
 		blurredCtx.drawImage(
 			sourceCanvas,
@@ -3306,13 +3314,18 @@ export class FrameRenderer {
 		maskRadius: number;
 	}): void {
 		const shadowStrength = clampUnitInterval(this.config.shadowIntensity);
+		const effectScale = getSceneEffectMetrics({
+			viewportWidth: this.config.width,
+			backgroundBlur: 0,
+			shadowIntensity: shadowStrength,
+		}).viewportScale;
 		for (const layer of this.videoShadowLayers) {
 			if (!this.config.showShadow || shadowStrength <= 0) {
 				layer.container.visible = false;
 				continue;
 			}
 
-			const offsetY = layer.offsetScale * shadowStrength;
+			const offsetY = layer.offsetScale * effectScale * shadowStrength;
 			this.rasterizeShadowLayer(layer, {
 				x: layout.maskX,
 				y: layout.maskY,
@@ -3321,7 +3334,7 @@ export class FrameRenderer {
 				radius: layout.maskRadius,
 				offsetY,
 				alpha: layer.alphaScale * shadowStrength,
-				blur: Math.max(0, layer.blurScale * shadowStrength),
+				blur: Math.max(0, layer.blurScale * effectScale * shadowStrength),
 			});
 		}
 	}
@@ -3331,56 +3344,26 @@ export class FrameRenderer {
 			return 0;
 		}
 
-		const { region, strength, blendedScale } = findDominantRegion(
-			this.config.zoomRegions,
+		const target = resolveSceneZoomTarget({
+			zoomRegions: this.config.zoomRegions,
 			timeMs,
-			{
-				connectZooms: this.config.connectZooms,
-				zoomInDurationMs: this.config.zoomInDurationMs,
-				zoomOutDurationMs: this.config.zoomOutDurationMs,
-			},
-		);
-
-		let targetScaleFactor = 1;
-		let targetFocus = { ...DEFAULT_FOCUS };
-		let targetProgress = 0;
-
-		if (region && strength > 0) {
-			const zoomScale = blendedScale ?? ZOOM_DEPTH_SCALES[region.depth];
-
-			// Cursor follow: use cursor-follow camera for non-manual zoom regions
-			let regionFocus = region.focus;
-			if (
-				!this.config.zoomClassicMode &&
-				region.mode !== "manual" &&
-				this.config.cursorTelemetry &&
-				this.config.cursorTelemetry.length > 0
-			) {
-				regionFocus = computeCursorFollowFocus(
-					this.cursorFollowCamera,
-					this.config.cursorTelemetry,
-					timeMs,
-					zoomScale,
-					strength,
-					region.focus,
-					{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-				);
-			}
-
-			targetScaleFactor = zoomScale;
-			targetFocus = regionFocus;
-			targetProgress = strength;
-		}
+			connectZooms: this.config.connectZooms,
+			zoomInDurationMs: this.config.zoomInDurationMs,
+			zoomOutDurationMs: this.config.zoomOutDurationMs,
+			zoomClassicMode: this.config.zoomClassicMode,
+			cursorTelemetry: this.config.cursorTelemetry,
+			cursorFollowCamera: this.cursorFollowCamera,
+		});
 
 		const state = this.animationState;
 		const previousScale = state.appliedScale;
 		const previousX = state.x;
 		const previousY = state.y;
 
-		state.scale = targetScaleFactor;
-		state.focusX = targetFocus.cx;
-		state.focusY = targetFocus.cy;
-		state.progress = targetProgress;
+		state.scale = target.scale;
+		state.focusX = target.focus.cx;
+		state.focusY = target.focus.cy;
+		state.progress = target.progress;
 
 		const projectedTransform = computeZoomTransform({
 			stageSize: this.layoutCache.stageSize,

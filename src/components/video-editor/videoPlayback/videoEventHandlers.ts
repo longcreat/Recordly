@@ -16,6 +16,7 @@ type PresentedFrameVideoElement = HTMLVideoElement & {
 interface VideoEventHandlersParams {
 	video: HTMLVideoElement;
 	isSeekingRef: React.MutableRefObject<boolean>;
+	shouldSnapPausedFrameRef?: React.MutableRefObject<boolean>;
 	isPlayingRef: React.MutableRefObject<boolean>;
 	allowPlaybackRef: React.MutableRefObject<boolean>;
 	currentTimeRef: React.MutableRefObject<number>;
@@ -30,6 +31,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	const {
 		video,
 		isSeekingRef,
+		shouldSnapPausedFrameRef,
 		isPlayingRef,
 		allowPlaybackRef,
 		currentTimeRef,
@@ -178,6 +180,9 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 	const handleSeeking = () => {
 		isSeekingRef.current = true;
+		if (shouldSnapPausedFrameRef) {
+			shouldSnapPausedFrameRef.current = true;
+		}
 		emitTime(video.currentTime);
 	};
 

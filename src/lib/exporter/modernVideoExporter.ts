@@ -17,13 +17,8 @@ import type {
 	ZoomRegion,
 	ZoomTransitionEasing,
 } from "@/components/video-editor/types";
-import { DEFAULT_WEBCAM_ROUNDNESS, ZOOM_DEPTH_SCALES } from "@/components/video-editor/types";
-import { DEFAULT_FOCUS } from "@/components/video-editor/videoPlayback/constants";
-import {
-	computeCursorFollowFocus,
-	createCursorFollowCameraState,
-	SNAP_TO_EDGES_RATIO_AUTO,
-} from "@/components/video-editor/videoPlayback/cursorFollowCamera";
+import { DEFAULT_WEBCAM_ROUNDNESS } from "@/components/video-editor/types";
+import { createCursorFollowCameraState } from "@/components/video-editor/videoPlayback/cursorFollowCamera";
 import { buildNativeCursorAtlas } from "@/components/video-editor/videoPlayback/cursorRenderer";
 import { getCursorViewportScale } from "@/components/video-editor/videoPlayback/cursorScale";
 import {
@@ -36,8 +31,9 @@ import {
 	resetSpringState,
 	stepSpringValue,
 } from "@/components/video-editor/videoPlayback/motionSmoothing";
+import { getSceneEffectMetrics } from "@/components/video-editor/videoPlayback/sceneEffects";
+import { resolveSceneZoomTarget } from "@/components/video-editor/videoPlayback/sceneMotion";
 import { getCursorStyleSizeMultiplier } from "@/components/video-editor/videoPlayback/uploadedCursorAssets";
-import { findDominantRegion } from "@/components/video-editor/videoPlayback/zoomRegionUtils";
 import { computeZoomTransform } from "@/components/video-editor/videoPlayback/zoomTransform";
 import {
 	getWebcamCornerRadiusPx,
@@ -2141,45 +2137,22 @@ export class ModernVideoExporter {
 
 		for (let frameIndex = 0; frameIndex < totalFrames; frameIndex += 1) {
 			const timeMs = frameIndex * frameDurationMs;
-			const { region, strength, blendedScale } = findDominantRegion(zoomRegions, timeMs, {
+			const target = resolveSceneZoomTarget({
+				zoomRegions,
+				timeMs,
 				connectZooms: this.config.connectZooms,
+				zoomClassicMode: this.config.zoomClassicMode,
+				cursorTelemetry: cursorTelemetry ?? [],
+				cursorFollowCamera,
 			});
-
-			let targetScale = 1;
-			let targetFocus = DEFAULT_FOCUS;
-			let targetProgress = 0;
-
-			if (region && strength > 0) {
-				const zoomScale = blendedScale ?? ZOOM_DEPTH_SCALES[region.depth];
-				let regionFocus = region.focus;
-				if (
-					!this.config.zoomClassicMode &&
-					region.mode !== "manual" &&
-					(cursorTelemetry?.length ?? 0) > 0
-				) {
-					regionFocus = computeCursorFollowFocus(
-						cursorFollowCamera,
-						cursorTelemetry ?? [],
-						timeMs,
-						zoomScale,
-						strength,
-						region.focus,
-						{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-					);
-				}
-
-				targetScale = zoomScale;
-				targetFocus = regionFocus;
-				targetProgress = strength;
-			}
 
 			const projectedTransform = computeZoomTransform({
 				stageSize,
 				baseMask,
-				zoomScale: targetScale,
-				zoomProgress: targetProgress,
-				focusX: targetFocus.cx,
-				focusY: targetFocus.cy,
+				zoomScale: target.scale,
+				zoomProgress: target.progress,
+				focusX: target.focus.cx,
+				focusY: target.focus.cy,
 			});
 			const deltaMs =
 				lastContentTimeMs !== null ? timeMs - lastContentTimeMs : frameDurationMs;
@@ -2482,7 +2455,11 @@ export class ModernVideoExporter {
 				sourceCropHeight: sourceCrop?.height,
 				backgroundColor: background.backgroundColor,
 				backgroundImagePath: background.backgroundImagePath ?? null,
-				backgroundBlurPx: Math.max(0, (this.config.backgroundBlur ?? 0) * 3),
+				backgroundBlurPx: getSceneEffectMetrics({
+					viewportWidth: this.config.width,
+					backgroundBlur: this.config.backgroundBlur ?? 0,
+					shadowIntensity: 0,
+				}).backgroundBlurPx,
 				borderRadius,
 				shadowIntensity,
 				webcamInputPath: webcamOverlay?.inputPath ?? null,

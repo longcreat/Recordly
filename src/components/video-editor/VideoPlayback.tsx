@@ -80,7 +80,6 @@ import {
 	type SpeedRegion,
 	type TrimRegion,
 	type WebcamOverlaySettings,
-	ZOOM_DEPTH_SCALES,
 	type ZoomDepth,
 	type ZoomFocus,
 	type ZoomMotionBlurTuning,
@@ -90,10 +89,7 @@ import {
 import { DEFAULT_FOCUS } from "./videoPlayback/constants";
 import {
 	type CursorFollowCameraState,
-	computeCursorFollowFocus,
 	createCursorFollowCameraState,
-	resetCursorFollowCamera,
-	SNAP_TO_EDGES_RATIO_AUTO,
 } from "./videoPlayback/cursorFollowCamera";
 import {
 	DEFAULT_CURSOR_CONFIG,
@@ -112,13 +108,18 @@ import {
 } from "./videoPlayback/motionSmoothing";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import { PreviewVideoSource } from "./videoPlayback/previewVideoSource";
+import { getSceneEffectMetrics } from "./videoPlayback/sceneEffects";
+import {
+	resolvePreviewMotionMode,
+	resolveSceneZoomTarget,
+	shouldComposePreviewFrame,
+} from "./videoPlayback/sceneMotion";
 import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import {
 	getWebcamMediaTargetTimeSeconds,
 	isWebcamMediaSynchronized,
 	shouldSeekWebcamMedia,
 } from "./videoPlayback/webcamSync";
-import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
 import {
 	applyZoomTransform,
 	computeZoomTransform,
@@ -406,6 +407,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const [pixiRendererBackend, setPixiRendererBackend] = useState<PixiPreviewBackend | null>(
 			null,
 		);
+		const [previewViewportWidth, setPreviewViewportWidth] = useState(640);
 		const [annotationSceneTransform, setAnnotationSceneTransform] =
 			useState<SceneTransformState>({
 				scale: 1,
@@ -467,6 +469,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const isPlayingRef = useRef(isPlaying);
 		const suspendRenderingRef = useRef(suspendRendering);
 		const isSeekingRef = useRef(false);
+		const shouldSnapPausedFrameRef = useRef(false);
 		const allowPlaybackRef = useRef(false);
 		const lockedVideoDimensionsRef = useRef<{
 			width: number;
@@ -516,7 +519,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const springScaleRef = useRef<SpringState>(createSpringState(1));
 		const springXRef = useRef<SpringState>(createSpringState(0));
 		const springYRef = useRef<SpringState>(createSpringState(0));
-		const lastTickTimeRef = useRef<number | null>(null);
+		const lastRenderedContentTimeRef = useRef<number | null>(null);
 		const zoomSmoothnessRef = useRef(zoomSmoothness);
 		const zoomClassicModeRef = useRef(zoomClassicMode);
 		const cursorFollowCameraRef = useRef<CursorFollowCameraState>(
@@ -630,7 +633,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				return null;
 			}
 
-			measurementContext.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${getDefaultCaptionFontFamily()}`;
+			measurementContext.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${autoCaptionSettings.fontFamily || getDefaultCaptionFontFamily()}`;
 
 			return buildActiveCaptionLayout({
 				cues: autoCaptions,
@@ -665,7 +668,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				return null;
 			}
 
-			measurementContext.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${getDefaultCaptionFontFamily()}`;
+			measurementContext.font = `${CAPTION_FONT_WEIGHT} ${fontSize}px ${autoCaptionSettings.fontFamily || getDefaultCaptionFontFamily()}`;
 			const measuredWidth = Math.max(
 				...captionEditSession.draft
 					.split(/\r?\n/)
@@ -1027,6 +1030,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 			if (result) {
 				stageSizeRef.current = result.stageSize;
+				setPreviewViewportWidth((current) =>
+					Math.abs(current - result.stageSize.width) < 0.5
+						? current
+						: result.stageSize.width,
+				);
 				syncPreviewMotionBlurQuality();
 				videoSizeRef.current = result.videoSize;
 				baseScaleRef.current = result.baseScale;
@@ -1248,14 +1256,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 		useEffect(() => {
 			isPlayingRef.current = isPlaying;
-			// Snap springs to current position when pausing so scrubbing is instant
-			if (!isPlaying) {
-				resetSpringState(springScaleRef.current);
-				resetSpringState(springXRef.current);
-				resetSpringState(springYRef.current);
-				resetCursorFollowCamera(cursorFollowCameraRef.current);
-				lastTickTimeRef.current = null;
-			}
 			const bgVideo = bgVideoRef.current;
 			if (bgVideo) {
 				if (isPlaying) {
@@ -1964,6 +1964,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				createVideoEventHandlers({
 					video,
 					isSeekingRef,
+					shouldSnapPausedFrameRef,
 					isPlayingRef,
 					allowPlaybackRef,
 					currentTimeRef,
@@ -2038,7 +2039,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					motionBlurTuning: zoomMotionBlurTuningRef.current,
 					transformOverride: transform,
 					motionBlurState: motionBlurStateRef.current,
-					frameTimeMs: performance.now(),
+					frameTimeMs: currentTimeRef.current,
 				});
 
 				state.x = appliedTransform.x;
@@ -2066,59 +2067,51 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					return;
 				}
 
-				const { region, strength, blendedScale } = findDominantRegion(
-					zoomRegionsRef.current,
-					currentTimeRef.current,
-					{
-						connectZooms: connectZoomsRef.current,
-						zoomInDurationMs: zoomInDurationMsRef.current,
-						zoomOutDurationMs: zoomOutDurationMsRef.current,
-					},
-				);
-
-				const defaultFocus = DEFAULT_FOCUS;
-				let targetScaleFactor = 1;
-				let targetFocus = defaultFocus;
-				let targetProgress = 0;
-
-				// If a zoom is selected but video is not playing, show default unzoomed view
-				// (the overlay will show where the zoom will be)
-				const selectedId = selectedZoomIdRef.current;
-				const hasSelectedZoom = selectedId !== null;
-				const shouldShowUnzoomedView = hasSelectedZoom && !isPlayingRef.current;
-
-				if (region && strength > 0 && !shouldShowUnzoomedView) {
-					const zoomScale = blendedScale ?? ZOOM_DEPTH_SCALES[region.depth];
-
-					// Cursor follow: use cursor-follow camera for non-manual zoom regions
-					let regionFocus = region.focus;
-					if (
-						!zoomClassicModeRef.current &&
-						region.mode !== "manual" &&
-						cursorTelemetryRef.current.length > 0
-					) {
-						regionFocus = computeCursorFollowFocus(
-							cursorFollowCameraRef.current,
-							cursorTelemetryRef.current,
-							currentTimeRef.current,
-							zoomScale,
-							strength,
-							region.focus,
-							{ snapToEdgesRatio: SNAP_TO_EDGES_RATIO_AUTO },
-						);
-					}
-
-					targetScaleFactor = zoomScale;
-					targetFocus = regionFocus;
-					targetProgress = strength;
+				// The export compositor advances exactly once for each output timestamp.
+				// Do the same here: repeated Pixi ticks at one media timestamp must not
+				// advance cursor springs or clear the blur calculated for that frame.
+				const contentTimeMs = currentTimeRef.current;
+				const previousContentTimeMs = lastRenderedContentTimeRef.current;
+				const deltaMs =
+					previousContentTimeMs !== null
+						? contentTimeMs - previousContentTimeMs
+						: 1000 / 60;
+				const contentTimeChanged =
+					previousContentTimeMs === null || Math.abs(deltaMs) > 0.0001;
+				const motionMode = resolvePreviewMotionMode({
+					isPlaying: isPlayingRef.current,
+					isSeeking: isSeekingRef.current,
+					shouldSnapPausedFrame: shouldSnapPausedFrameRef.current,
+					zoomClassicMode: zoomClassicModeRef.current,
+				});
+				if (
+					!shouldComposePreviewFrame({
+						motionMode,
+						contentTimeChanged,
+						shouldSnapPausedFrame: shouldSnapPausedFrameRef.current,
+					})
+				) {
+					return;
 				}
+				lastRenderedContentTimeRef.current = contentTimeMs;
+
+				const target = resolveSceneZoomTarget({
+					zoomRegions: zoomRegionsRef.current,
+					timeMs: currentTimeRef.current,
+					connectZooms: connectZoomsRef.current,
+					zoomInDurationMs: zoomInDurationMsRef.current,
+					zoomOutDurationMs: zoomOutDurationMsRef.current,
+					zoomClassicMode: zoomClassicModeRef.current,
+					cursorTelemetry: cursorTelemetryRef.current,
+					cursorFollowCamera: cursorFollowCameraRef.current,
+				});
 
 				const state = animationStateRef.current;
 
-				state.scale = targetScaleFactor;
-				state.focusX = targetFocus.cx;
-				state.focusY = targetFocus.cy;
-				state.progress = targetProgress;
+				state.scale = target.scale;
+				state.focusX = target.focus.cx;
+				state.focusY = target.focus.cy;
+				state.progress = target.progress;
 
 				const projectedTransform = computeZoomTransform({
 					stageSize: stageSizeRef.current,
@@ -2129,25 +2122,21 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					focusY: state.focusY,
 				});
 
-				// Spring-driven zoom animation
-				const now = performance.now();
-				const deltaMs =
-					lastTickTimeRef.current !== null ? now - lastTickTimeRef.current : 1000 / 60;
-				lastTickTimeRef.current = now;
+				// Advance scene motion from the source frame's media timestamp, exactly as
+				// export does. Wall-clock ticker time makes speed regions and dropped UI
+				// frames produce a different camera path from the encoded output.
+				const contentAdvanced = previousContentTimeMs === null || deltaMs > 0;
 
 				const zoomSpringConfig = getZoomSpringConfig(zoomSmoothnessRef.current, {
 					stiffnessMultiplier: cameraSpringStiffnessMultiplierRef.current,
 					dampingMultiplier: cameraSpringDampingMultiplierRef.current,
 					massMultiplier: cameraSpringMassMultiplierRef.current,
 				});
-				const useSpring =
-					isPlayingRef.current && !isSeekingRef.current && !zoomClassicModeRef.current;
-
 				let appliedScale: number;
 				let appliedX: number;
 				let appliedY: number;
 
-				if (useSpring) {
+				if (motionMode === "spring" && contentAdvanced) {
 					appliedScale = stepSpringValue(
 						springScaleRef.current,
 						projectedTransform.scale,
@@ -2166,17 +2155,21 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						deltaMs,
 						zoomSpringConfig,
 					);
-				} else {
-					// Snap instantly when paused, seeking, or in classic mode
+				} else if (motionMode === "snap") {
+					// Timeline seeks and classic mode intentionally evaluate the exact target.
 					appliedScale = projectedTransform.scale;
 					appliedX = projectedTransform.x;
 					appliedY = projectedTransform.y;
 					resetSpringState(springScaleRef.current, appliedScale);
 					resetSpringState(springXRef.current, appliedX);
 					resetSpringState(springYRef.current, appliedY);
+				} else {
+					appliedScale = state.appliedScale;
+					appliedX = state.x;
+					appliedY = state.y;
 				}
 
-				applyTransform({ scale: appliedScale, x: appliedX, y: appliedY }, targetFocus);
+				applyTransform({ scale: appliedScale, x: appliedX, y: appliedY }, target.focus);
 
 				applyWebcamBubbleLayout(animationStateRef.current.appliedScale || 1);
 
@@ -2188,8 +2181,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						timeMs,
 						baseMaskRef.current,
 						showCursorRef.current,
-						!isPlayingRef.current || isSeekingRef.current,
+						isSeekingRef.current || shouldSnapPausedFrameRef.current,
 					);
+				}
+
+				// Seeking events request one exact composition. Further Pixi ticks at the
+				// same media timestamp must hold it just like an exported frame.
+				if (shouldSnapPausedFrameRef.current) {
+					shouldSnapPausedFrameRef.current = false;
 				}
 			};
 
@@ -2401,9 +2400,15 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			: resolvedWallpaperKind === "video"
 				? {}
 				: { background: resolvedWallpaper || "" };
+		const sceneEffects = getSceneEffectMetrics({
+			viewportWidth: previewViewportWidth,
+			backgroundBlur,
+			shadowIntensity: showShadow ? shadowIntensity : 0,
+		});
+		const captionFontFamily = autoCaptionSettings?.fontFamily || getDefaultCaptionFontFamily();
 		// Overscan blurred wallpaper layers so the browser never samples transparent
 		// pixels beyond the preview bounds, which otherwise looks like a vignette.
-		const backgroundBlurOverscan = backgroundBlur > 0 ? Math.ceil(backgroundBlur * 2) : 0;
+		const backgroundBlurOverscan = sceneEffects.backgroundOverscanPx;
 		const fallbackVideoClassName = pixiRendererError
 			? "absolute inset-0 h-full w-full object-cover"
 			: "pointer-events-none absolute left-0 top-0 h-px w-px opacity-0";
@@ -2449,7 +2454,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						loop
 						playsInline
 						style={{
-							filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : "none",
+							filter:
+								sceneEffects.backgroundBlurPx > 0
+									? `blur(${sceneEffects.backgroundBlurPx}px)`
+									: "none",
 							inset: -backgroundBlurOverscan,
 							width: `calc(100% + ${backgroundBlurOverscan * 2}px)`,
 							height: `calc(100% + ${backgroundBlurOverscan * 2}px)`,
@@ -2460,7 +2468,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						className="absolute inset-0 bg-cover bg-center"
 						style={{
 							...backgroundStyle,
-							filter: backgroundBlur > 0 ? `blur(${backgroundBlur}px)` : "none",
+							filter:
+								sceneEffects.backgroundBlurPx > 0
+									? `blur(${sceneEffects.backgroundBlurPx}px)`
+									: "none",
 							inset: -backgroundBlurOverscan,
 						}}
 					/>
@@ -2469,10 +2480,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					ref={containerRef}
 					className="absolute inset-0"
 					style={{
-						filter:
-							showShadow && shadowIntensity > 0
-								? `drop-shadow(0 ${shadowIntensity * 12}px ${shadowIntensity * 48}px rgba(0,0,0,${shadowIntensity * 0.7})) drop-shadow(0 ${shadowIntensity * 4}px ${shadowIntensity * 16}px rgba(0,0,0,${shadowIntensity * 0.5})) drop-shadow(0 ${shadowIntensity * 2}px ${shadowIntensity * 8}px rgba(0,0,0,${shadowIntensity * 0.3}))`
-								: "none",
+						filter: sceneEffects.shadowFilter,
 					}}
 				/>
 				{hasRendererFallback && (
@@ -2559,8 +2567,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										maxWidth: `${autoCaptionSettings.maxWidth}%`,
 										opacity: activeCaptionLayout.opacity,
 										transform: `translateY(${activeCaptionLayout.translateY}px) scale(${activeCaptionLayout.scale})`,
-										transformOrigin: "center bottom",
-										filter: "drop-shadow(0 12px 30px rgba(0, 0, 0, 0.28))",
+										transformOrigin: "center center",
 									}}
 								>
 									<div
@@ -2599,7 +2606,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										}}
 										style={{
 											backgroundColor: `rgba(0, 0, 0, ${autoCaptionSettings.backgroundOpacity})`,
-											fontFamily: getDefaultCaptionFontFamily(),
+											fontFamily: captionFontFamily,
 											fontSize: `${getCaptionScaledFontSize(
 												autoCaptionSettings.fontSize,
 												overlayRef.current?.clientWidth || 960,
@@ -2802,8 +2809,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 												typeof annotation.endMs !== "number"
 											)
 												return false;
-
-											if (annotation.id === selectedAnnotationId) return true;
 
 											const timeMs = Math.round(currentTime * 1000);
 											return (

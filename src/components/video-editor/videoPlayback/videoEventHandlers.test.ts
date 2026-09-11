@@ -174,9 +174,11 @@ describe("createVideoEventHandlers", () => {
 			paused: true,
 		});
 		const onTimeUpdate = vi.fn();
+		const shouldSnapPausedFrameRef = createMutableRef(false);
 		const handlers = createVideoEventHandlers({
 			video,
 			isSeekingRef: createMutableRef(true),
+			shouldSnapPausedFrameRef,
 			isPlayingRef: createMutableRef(false),
 			allowPlaybackRef: createMutableRef(true),
 			currentTimeRef: createMutableRef(0),
@@ -187,9 +189,11 @@ describe("createVideoEventHandlers", () => {
 			speedRegionsRef: createMutableRef([]),
 		});
 
+		handlers.handleSeeking();
 		handlers.handleSeeked();
 
 		expect(video.currentTime).toBe(2);
 		expect(onTimeUpdate).toHaveBeenLastCalledWith(2);
+		expect(shouldSnapPausedFrameRef.current).toBe(true);
 	});
 });
