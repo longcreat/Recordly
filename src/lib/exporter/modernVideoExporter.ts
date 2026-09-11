@@ -1122,7 +1122,6 @@ export class ModernVideoExporter {
 					gpu.vendor && !gpu.name.toLowerCase().includes(gpu.vendor.toLowerCase())
 						? `vendor=${gpu.vendor}`
 						: null,
-					gpu.videoMemoryMb ? `VRAM=${gpu.videoMemoryMb} MB` : null,
 					gpu.active === true ? "active" : gpu.active === false ? "inactive" : null,
 				].filter((value): value is string => Boolean(value));
 				lines.push(

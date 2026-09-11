@@ -60,7 +60,6 @@ type ElectronGpuDeviceLike = {
 	vendorId?: number | string;
 	vendorString?: string;
 	deviceString?: string;
-	videoMemory?: number;
 };
 
 type ElectronGpuInfoLike = {
@@ -81,7 +80,6 @@ export interface ExportHardwareInfo {
 		name: string;
 		vendor: string | null;
 		active: boolean | null;
-		videoMemoryMb: number | null;
 	}>;
 	gpuFeatures: {
 		videoDecode: string | null;
@@ -1939,10 +1937,6 @@ export function sanitizeExportGpuInfo(
 					name: device.deviceString?.trim() || vendor || "Unknown GPU",
 					vendor,
 					active: typeof device.active === "boolean" ? device.active : null,
-					videoMemoryMb:
-						typeof device.videoMemory === "number" && device.videoMemory > 0
-							? device.videoMemory
-							: null,
 				};
 			})
 		: [];

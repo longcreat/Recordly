@@ -432,7 +432,6 @@ describe("export hardware diagnostics", () => {
 					vendorId: "0x10de",
 					deviceId: 9999,
 					deviceString: "NVIDIA GeForce RTX 4070",
-					videoMemory: 12_288,
 				},
 			],
 		});
@@ -444,7 +443,6 @@ describe("export hardware diagnostics", () => {
 					name: "NVIDIA GeForce RTX 4070",
 					vendor: "NVIDIA",
 					active: true,
-					videoMemoryMb: 12_288,
 				},
 			],
 		});

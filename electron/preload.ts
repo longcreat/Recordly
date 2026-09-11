@@ -114,7 +114,6 @@ type ExportHardwareInfo = {
 		name: string;
 		vendor: string | null;
 		active: boolean | null;
-		videoMemoryMb: number | null;
 	}>;
 	gpuFeatures: {
 		videoDecode: string | null;

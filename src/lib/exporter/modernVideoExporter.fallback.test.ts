@@ -352,7 +352,6 @@ describe("ModernVideoExporter native fallback routing", () => {
 						name: "NVIDIA GeForce RTX 4070",
 						vendor: "NVIDIA",
 						active: true,
-						videoMemoryMb: 12_288,
 					},
 				],
 				gpuFeatures: {
@@ -384,7 +383,7 @@ describe("ModernVideoExporter native fallback routing", () => {
 		expect(report).toContain("System: win32 10.0.26100 (x64); model=Custom PC");
 		expect(report).toContain("CPU: AMD Ryzen 9 7900X; 24 logical processors");
 		expect(report).toContain("Memory: 31.8 GB");
-		expect(report).toContain("GPU 1: NVIDIA GeForce RTX 4070; VRAM=12288 MB; active");
+		expect(report).toContain("GPU 1: NVIDIA GeForce RTX 4070; active");
 		expect(report).toContain(
 			"GPU acceleration: video decode=enabled; video encode=enabled; WebGL=enabled; WebGPU=enabled",
 		);
