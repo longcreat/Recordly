@@ -290,6 +290,51 @@ describe("ModernVideoExporter native fallback routing", () => {
 		expect(mocks.muxerFinalize).toHaveBeenCalledTimes(1);
 	});
 
+	it("builds actionable diagnostics for input decoder failures", () => {
+		vi.stubGlobal("navigator", {
+			platform: "Win32",
+			userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+		});
+		const exporter = new ModernVideoExporter({
+			videoUrl: "file:///recording.mp4",
+			width: 1200,
+			height: 570,
+			frameRate: 60,
+			bitrate: 8_000_000,
+			backendPreference: "auto",
+		} as never) as unknown as {
+			buildLightningExportError: (error: unknown) => string;
+			sourceVideoInfo: typeof mocks.videoInfo;
+			renderBackend: "webgpu";
+			encodeBackend: "ffmpeg";
+			encoderName: string;
+			processedFrameCount: number;
+			totalExportStartTimeMs: number;
+			mediaSourceRetryAttempted: boolean;
+		};
+		exporter.sourceVideoInfo = mocks.videoInfo;
+		exporter.renderBackend = "webgpu";
+		exporter.encodeBackend = "ffmpeg";
+		exporter.encoderName = "h264-stream-copy";
+		exporter.processedFrameCount = 314;
+		exporter.totalExportStartTimeMs = 1;
+		exporter.mediaSourceRetryAttempted = true;
+
+		const report = exporter.buildLightningExportError(
+			new Error(
+				"[VIDEO_DECODE_ENCODING_ERROR] VideoDecoder failure: EncodingError: bad frame",
+			),
+		);
+
+		expect(report).toContain("Failure code: VIDEO_DECODE_ENCODING_ERROR");
+		expect(report).toContain("Failure stage: Input video decoding");
+		expect(report).toContain("Source: h264 1920x1080 @ 30.000 FPS; 1.000s");
+		expect(report).toContain("Progress at failure: 314 rendered frames after");
+		expect(report).toContain("Media source retry: attempted with a fresh source");
+		expect(report).toContain("If only this recording fails");
+		expect(report).not.toContain("Windows Lightning exports can use WebCodecs or FFmpeg");
+	});
+
 	it("forwards cursor click-effect settings into the modern frame renderer", async () => {
 		const { ModernVideoExporter } = await import("./modernVideoExporter");
 		const { FrameRenderer } = await import("./modernFrameRenderer");

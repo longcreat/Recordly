@@ -27,6 +27,92 @@ interface StreamingVideoDecoderLoadOptions {
 	useFallbackMediaSource?: boolean;
 }
 
+interface VideoDecodeFailureContext {
+	decoderConfig: VideoDecoderConfig;
+	sourceMetadata?: DecodedVideoInfo;
+	chunkIndex?: number;
+	chunk?: EncodedVideoChunk;
+	decoderState?: CodecState;
+	decodeQueueSize?: number;
+}
+
+export function getVideoDecodeFailureCode(error: unknown): string {
+	const name = error instanceof DOMException ? error.name : "";
+	switch (name) {
+		case "EncodingError":
+			return "VIDEO_DECODE_ENCODING_ERROR";
+		case "NotSupportedError":
+			return "VIDEO_CODEC_UNSUPPORTED";
+		case "QuotaExceededError":
+			return "VIDEO_DECODER_RESOURCE_EXHAUSTED";
+		case "InvalidStateError":
+			return "VIDEO_DECODER_INVALID_STATE";
+		default:
+			return "VIDEO_DECODE_FAILED";
+	}
+}
+
+function describeUnknownError(error: unknown): string {
+	if (error instanceof DOMException) {
+		return `${error.name}: ${error.message}`;
+	}
+
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return String(error);
+}
+
+export function buildVideoDecodeFailure(error: unknown, context: VideoDecodeFailureContext): Error {
+	const details = [`codec=${context.decoderConfig.codec}`];
+	const failureCode = getVideoDecodeFailureCode(error);
+	const width = context.decoderConfig.codedWidth;
+	const height = context.decoderConfig.codedHeight;
+	if (width && height) {
+		details.push(`codedSize=${width}x${height}`);
+	}
+	if (context.decoderConfig.hardwareAcceleration) {
+		details.push(`hardwareAcceleration=${context.decoderConfig.hardwareAcceleration}`);
+	}
+	if (context.sourceMetadata) {
+		details.push(`sourceFps=${context.sourceMetadata.frameRate}`);
+		details.push(`sourceDurationSec=${context.sourceMetadata.duration}`);
+	}
+	if (context.chunkIndex !== undefined) {
+		details.push(`chunkIndex=${context.chunkIndex}`);
+	}
+	if (context.chunk) {
+		details.push(`chunkType=${context.chunk.type}`);
+		details.push(`chunkTimestampUs=${context.chunk.timestamp}`);
+		details.push(`sourceTimeSec=${(context.chunk.timestamp / 1_000_000).toFixed(3)}`);
+		if (typeof context.chunk.duration === "number") {
+			details.push(`chunkDurationUs=${context.chunk.duration}`);
+		}
+		details.push(`chunkBytes=${context.chunk.byteLength}`);
+	}
+	if (context.decoderState) {
+		details.push(`decoderState=${context.decoderState}`);
+	}
+	if (context.decodeQueueSize !== undefined) {
+		details.push(`decodeQueueSize=${context.decodeQueueSize}`);
+	}
+
+	const failure = new Error(
+		`[${failureCode}] VideoDecoder failure: ${describeUnknownError(error)} (${details.join(", ")})`,
+	);
+	(failure as Error & { cause?: unknown }).cause = error;
+	return failure;
+}
+
+export function preserveFirstVideoDecodeFailure(
+	existingError: Error | null,
+	error: unknown,
+	context: VideoDecodeFailureContext,
+): Error {
+	return existingError ?? buildVideoDecodeFailure(error, context);
+}
+
 /** Decoder retains ownership of the VideoFrame and closes it after use. */
 type OnFrameCallback = (
 	frame: VideoFrame,
@@ -260,6 +346,31 @@ export class StreamingVideoDecoder {
 		let decodeDone = false;
 		let firstDecodedFrameTimestampUs: number | null = null;
 		let decodedFrameTimelineOffsetUs = 0;
+		let submittedChunkCount = 0;
+		let lastSubmittedChunk: EncodedVideoChunk | undefined;
+		let lastSubmittedChunkIndex: number | undefined;
+		const preferredDecoderConfig = shouldPreferSoftwareDecode
+			? {
+					...decoderConfig,
+					hardwareAcceleration: "prefer-software" as const,
+				}
+			: decoderConfig;
+		let activeDecoderConfig = preferredDecoderConfig;
+		const getDecoderFailureContext = (): VideoDecodeFailureContext => ({
+			decoderConfig: activeDecoderConfig,
+			sourceMetadata: this.metadata ?? undefined,
+			chunkIndex: lastSubmittedChunkIndex,
+			chunk: lastSubmittedChunk,
+			decoderState: this.decoder?.state,
+			decodeQueueSize: this.decoder?.decodeQueueSize,
+		});
+		const recordFirstDecodeError = (error: unknown) => {
+			decodeError = preserveFirstVideoDecodeFailure(
+				decodeError,
+				error,
+				getDecoderFailureContext(),
+			);
+		};
 
 		this.decoder = new VideoDecoder({
 			output: (frame: VideoFrame) => {
@@ -273,7 +384,7 @@ export class StreamingVideoDecoder {
 				notifyBackpressureProgress();
 			},
 			error: (e: DOMException) => {
-				decodeError = new Error(`VideoDecoder error: ${e.message}`);
+				recordFirstDecodeError(e);
 				if (frameResolve) {
 					const resolve = frameResolve;
 					frameResolve = null;
@@ -282,25 +393,23 @@ export class StreamingVideoDecoder {
 				notifyBackpressureProgress();
 			},
 		});
-		const preferredDecoderConfig = shouldPreferSoftwareDecode
-			? {
-					...decoderConfig,
-					hardwareAcceleration: "prefer-software" as const,
-				}
-			: decoderConfig;
-
 		try {
 			this.decoder.configure(preferredDecoderConfig);
 		} catch (error) {
 			if (!shouldPreferSoftwareDecode) {
-				throw error;
+				throw buildVideoDecodeFailure(error, getDecoderFailureContext());
 			}
 			// Fall back to default decoder config if software preference is unsupported.
-			this.decoder.configure(decoderConfig);
+			activeDecoderConfig = decoderConfig;
+			try {
+				this.decoder.configure(decoderConfig);
+			} catch (fallbackError) {
+				throw buildVideoDecodeFailure(fallbackError, getDecoderFailureContext());
+			}
 		}
 
 		const getNextFrame = (): Promise<VideoFrame | null> => {
-			if (decodeError) throw decodeError;
+			if (decodeError) return Promise.resolve(null);
 			if (pendingFrames.length > 0) {
 				const frame = pendingFrames.shift()!;
 				notifyBackpressureProgress();
@@ -325,7 +434,7 @@ export class StreamingVideoDecoder {
 		// Feed chunks to decoder in background with backpressure
 		const feedPromise = (async () => {
 			try {
-				while (!this.cancelled) {
+				while (!this.cancelled && !decodeError) {
 					const { done, value: chunk } = await reader.read();
 					if (done || !chunk) break;
 
@@ -347,22 +456,36 @@ export class StreamingVideoDecoder {
 
 					// Backpressure on both decode queue and decoded frame backlog.
 					while (
+						!decodeError &&
+						this.decoder!.state === "configured" &&
 						(this.decoder!.decodeQueueSize > decodeQueueLimit ||
 							pendingFrames.length > pendingFrameLimit) &&
 						!this.cancelled
 					) {
 						await waitForBackpressureProgress();
 					}
-					if (this.cancelled) break;
+					if (this.cancelled || decodeError) break;
+					if (this.decoder!.state !== "configured") {
+						recordFirstDecodeError(
+							new DOMException(
+								"Decoder closed before the next video chunk was submitted.",
+								"InvalidStateError",
+							),
+						);
+						break;
+					}
 
+					lastSubmittedChunk = chunk;
+					lastSubmittedChunkIndex = submittedChunkCount;
 					this.decoder!.decode(chunk);
+					submittedChunkCount++;
 				}
 
 				if (!this.cancelled && this.decoder!.state === "configured") {
 					await this.decoder!.flush();
 				}
 			} catch (e) {
-				decodeError = e instanceof Error ? e : new Error(String(e));
+				recordFirstDecodeError(e);
 			} finally {
 				decodeDone = true;
 				if (frameResolve) {
@@ -535,7 +658,7 @@ export class StreamingVideoDecoder {
 		}
 
 		// Drain leftover decoded frames
-		while (!decodeDone) {
+		while (!decodeDone && !decodeError) {
 			const frame = await getNextFrame();
 			if (!frame) break;
 			frame.close();
@@ -554,6 +677,10 @@ export class StreamingVideoDecoder {
 			this.decoder.close();
 		}
 		this.decoder = null;
+
+		if (decodeError) {
+			throw decodeError;
+		}
 
 		const requiredEndSec = segments.length > 0 ? segments[segments.length - 1].endSec : 0;
 		if (

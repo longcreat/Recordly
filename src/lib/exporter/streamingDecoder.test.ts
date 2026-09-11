@@ -1,9 +1,90 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	buildVideoDecodeFailure,
 	getDecodedFrameStartupOffsetUs,
 	getDecodedFrameTimelineOffsetUs,
+	getVideoDecodeFailureCode,
+	preserveFirstVideoDecodeFailure,
 	StreamingVideoDecoder,
 } from "./streamingDecoder";
+
+describe("buildVideoDecodeFailure", () => {
+	it("assigns stable failure codes for common WebCodecs errors", () => {
+		expect(getVideoDecodeFailureCode(new DOMException("bad frame", "EncodingError"))).toBe(
+			"VIDEO_DECODE_ENCODING_ERROR",
+		);
+		expect(getVideoDecodeFailureCode(new DOMException("busy", "QuotaExceededError"))).toBe(
+			"VIDEO_DECODER_RESOURCE_EXHAUSTED",
+		);
+		expect(getVideoDecodeFailureCode(new Error("demux read failed"))).toBe(
+			"VIDEO_DECODE_FAILED",
+		);
+	});
+
+	it("reports the original decoder error with codec and chunk context", () => {
+		const originalError = new DOMException("Failed to decode frame", "EncodingError");
+		const chunk = {
+			type: "delta",
+			timestamp: 1_500_000,
+			duration: 16_667,
+			byteLength: 4,
+		} as EncodedVideoChunk;
+
+		const error = buildVideoDecodeFailure(originalError, {
+			decoderConfig: {
+				codec: "avc1.640034",
+				codedWidth: 1920,
+				codedHeight: 1080,
+				hardwareAcceleration: "prefer-hardware",
+			},
+			sourceMetadata: {
+				width: 1920,
+				height: 1080,
+				duration: 61.25,
+				frameRate: 60,
+				codec: "avc1.640034",
+				hasAudio: true,
+			},
+			chunkIndex: 42,
+			chunk,
+			decoderState: "closed",
+			decodeQueueSize: 7,
+		});
+
+		expect(error.message).toContain("EncodingError: Failed to decode frame");
+		expect(error.message).toContain("[VIDEO_DECODE_ENCODING_ERROR]");
+		expect(error.message).toContain("codec=avc1.640034");
+		expect(error.message).toContain("codedSize=1920x1080");
+		expect(error.message).toContain("chunkIndex=42");
+		expect(error.message).toContain("chunkType=delta");
+		expect(error.message).toContain("chunkTimestampUs=1500000");
+		expect(error.message).toContain("sourceTimeSec=1.500");
+		expect(error.message).toContain("chunkDurationUs=16667");
+		expect(error.message).toContain("chunkBytes=4");
+		expect(error.message).toContain("sourceFps=60");
+		expect(error.message).toContain("sourceDurationSec=61.25");
+		expect(error.message).toContain("decoderState=closed");
+		expect(error.cause).toBe(originalError);
+	});
+
+	it("does not replace the original failure with a later closed-codec exception", () => {
+		const originalFailure = new Error("VideoDecoder failure: EncodingError: bad frame");
+		const result = preserveFirstVideoDecodeFailure(
+			originalFailure,
+			new DOMException("Cannot call 'decode' on a closed codec.", "InvalidStateError"),
+			{
+				decoderConfig: {
+					codec: "avc1.640034",
+					codedWidth: 1920,
+					codedHeight: 1080,
+				},
+				decoderState: "closed",
+			},
+		);
+
+		expect(result).toBe(originalFailure);
+	});
+});
 
 const {
 	mockDemuxerLoad,

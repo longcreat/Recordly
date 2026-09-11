@@ -363,6 +363,8 @@ export class ModernVideoExporter {
 	private lastProgressSampleTimeMs = 0;
 	private lastProgressSampleFrame = 0;
 	private displayedRenderFps = 0;
+	private sourceVideoInfo: DecodedVideoInfo | null = null;
+	private mediaSourceRetryAttempted = false;
 
 	constructor(config: VideoExporterConfig) {
 		this.config = config;
@@ -371,6 +373,7 @@ export class ModernVideoExporter {
 	async export(): Promise<ExportResult> {
 		let useFallbackMediaSource = false;
 		let retriedWithFallbackMediaSource = false;
+		this.mediaSourceRetryAttempted = false;
 
 		while (true) {
 			let shouldRetryWithFallbackMediaSource = false;
@@ -382,6 +385,7 @@ export class ModernVideoExporter {
 				this.nativeStaticLayoutSkipReason = null;
 				this.nativeStaticLayoutSkipReasons = [];
 				this.nativeStaticLayoutBackgroundSkipReason = null;
+				this.sourceVideoInfo = null;
 				this.totalExportStartTimeMs = this.getNowMs();
 				const backendPreference = this.config.backendPreference ?? "auto";
 				const runtimePlatform = this.getRuntimePlatform();
@@ -522,6 +526,7 @@ export class ModernVideoExporter {
 				const videoInfo = await this.streamingDecoder.loadMetadata(this.config.videoUrl, {
 					useFallbackMediaSource,
 				});
+				this.sourceVideoInfo = videoInfo;
 				this.metadataLoadTimeMs = this.getNowMs() - stageStartedAt;
 				const nativeAudioPlan = this.buildNativeAudioPlan(videoInfo);
 				const shouldUsePitchPreservingFfmpegAudio =
@@ -890,6 +895,7 @@ export class ModernVideoExporter {
 					this.shouldRetryWithFallbackMediaSource(error)
 				) {
 					retriedWithFallbackMediaSource = true;
+					this.mediaSourceRetryAttempted = true;
 					useFallbackMediaSource = true;
 					shouldRetryWithFallbackMediaSource = true;
 					console.warn(
@@ -964,10 +970,23 @@ export class ModernVideoExporter {
 	private getLightningErrorGuidance(message: string): string[] {
 		const guidance = new Set<string>();
 		const platform = this.getPlatformLabel();
+		const isVideoDecodeFailure = /VideoDecoder failure|VIDEO_DECODE|VIDEO_CODEC/i.test(message);
 
-		guidance.add(
-			"Lightning is designed to work on macOS, Windows, and Linux, but the available encoder path depends on WebCodecs support, GPU drivers, and the bundled FFmpeg encoders.",
-		);
+		if (isVideoDecodeFailure) {
+			guidance.add(
+				"The input video decoder failed before Recordly could finish rendering the source frames.",
+			);
+			guidance.add(
+				"If only this recording fails, remux or convert it to a standard H.264 MP4; the source may contain a damaged or unsupported frame.",
+			);
+			guidance.add(
+				"If every recording fails, update the GPU/media driver and retry at 30 FPS to reduce decoder pressure.",
+			);
+		} else {
+			guidance.add(
+				"Lightning is designed to work on macOS, Windows, and Linux, but the available encoder path depends on WebCodecs support, GPU drivers, and the bundled FFmpeg encoders.",
+			);
+		}
 
 		if (/even output dimensions/i.test(message)) {
 			guidance.add(
@@ -992,15 +1011,15 @@ export class ModernVideoExporter {
 			);
 		}
 
-		if (platform === "Windows") {
+		if (!isVideoDecodeFailure && platform === "Windows") {
 			guidance.add(
 				"Windows Lightning exports can use WebCodecs or FFmpeg encoders such as h264_nvenc, h264_qsv, h264_amf, h264_mf, or libx264 depending on the machine.",
 			);
-		} else if (platform === "Linux") {
+		} else if (!isVideoDecodeFailure && platform === "Linux") {
 			guidance.add(
 				"Linux Lightning exports can use WebCodecs when supported, or FFmpeg encoders such as libx264 and optional GPU paths depending on the distro build.",
 			);
-		} else if (platform === "macOS") {
+		} else if (!isVideoDecodeFailure && platform === "macOS") {
 			guidance.add(
 				"macOS Lightning exports can use WebCodecs or VideoToolbox/libx264 through Breeze depending on the output profile.",
 			);
@@ -1011,6 +1030,8 @@ export class ModernVideoExporter {
 
 	private buildLightningExportError(error: unknown): string {
 		const message = error instanceof Error ? error.message : String(error);
+		const failureCode = message.match(/\[([A-Z][A-Z0-9_]+)\]/)?.[1];
+		const isVideoDecodeFailure = /VideoDecoder failure|VIDEO_DECODE|VIDEO_CODEC/i.test(message);
 		const resolvedEncodePath =
 			this.encodeBackend === "ffmpeg"
 				? `${NATIVE_EXPORT_ENGINE_NAME} native`
@@ -1019,11 +1040,33 @@ export class ModernVideoExporter {
 					: null;
 		const lines = [
 			`${LIGHTNING_PIPELINE_NAME} export failed.`,
+			...(failureCode ? [`Failure code: ${failureCode}`] : []),
+			...(isVideoDecodeFailure ? ["Failure stage: Input video decoding"] : []),
 			`Reason: ${message}`,
 			`Platform: ${this.getPlatformLabel()}`,
 			`Requested backend mode: ${this.config.backendPreference ?? "auto"}`,
 			`Output: ${this.config.width}x${this.config.height} @ ${this.config.frameRate} FPS`,
 		];
+
+		if (this.sourceVideoInfo) {
+			lines.push(
+				`Source: ${this.sourceVideoInfo.codec} ${this.sourceVideoInfo.width}x${this.sourceVideoInfo.height} @ ${this.sourceVideoInfo.frameRate.toFixed(3)} FPS; ${this.sourceVideoInfo.duration.toFixed(3)}s`,
+			);
+		}
+
+		if (this.totalExportStartTimeMs > 0) {
+			const elapsedSeconds = Math.max(
+				0,
+				(this.getNowMs() - this.totalExportStartTimeMs) / 1000,
+			);
+			lines.push(
+				`Progress at failure: ${this.processedFrameCount} rendered frames after ${elapsedSeconds.toFixed(2)}s`,
+			);
+		}
+
+		if (this.mediaSourceRetryAttempted) {
+			lines.push("Media source retry: attempted with a fresh source");
+		}
 
 		if (this.renderBackend) {
 			lines.push(`Renderer: ${this.renderBackend}`);
