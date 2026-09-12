@@ -1100,6 +1100,8 @@ export function SettingsPanel({
 	const { locale, setLocale, t } = useI18n();
 	const { preference: themePreference, setPreference: setThemePreference } = useTheme();
 	const isBackgroundPanel = panelMode === "background";
+	const [internalActiveEffectSection] = useState<EditorEffectSection>("scene");
+	const activeEffectSection = activeEffectSectionProp ?? internalActiveEffectSection;
 	const initialEditorPreferences = useMemo(() => loadEditorPreferences(), []);
 	const [builtInWallpapers, setBuiltInWallpapers] =
 		useState<BuiltInWallpaper[]>(BUILT_IN_WALLPAPERS);
@@ -1202,11 +1204,13 @@ export function SettingsPanel({
 					);
 				}
 			}
-		})();
-		return () => {
-			mounted = false;
-		};
-	}, []);
+	})();
+	return () => {
+		mounted = false;
+	};
+	// Dependency mirrors upstream: the section guard above must re-run when the
+	// active section changes, or wallpapers never load after initial mount.
+	}, [activeEffectSection, isBackgroundPanel]);
 
 	const colorPalette = [
 		"#FF0000",
@@ -1241,8 +1245,6 @@ export function SettingsPanel({
 	const customColorInputRef = useRef<HTMLInputElement | null>(null);
 	const cursorClickEffectColorInputRef = useRef<HTMLInputElement | null>(null);
 	const defaultWebcam = initialEditorPreferences.webcam;
-	const [internalActiveEffectSection] = useState<EditorEffectSection>("scene");
-	const activeEffectSection = activeEffectSectionProp ?? internalActiveEffectSection;
 	const [builtInCursorPreviewUrls, setBuiltInCursorPreviewUrls] = useState<
 		Partial<Record<string, string>>
 	>({});
