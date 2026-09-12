@@ -67,6 +67,10 @@ import {
 } from "../recording/ffmpeg";
 import { resolveRecordingFrameRate } from "../recording/frameRatePreference";
 import {
+	qualityToBitratePercent,
+	resolveRecordingQuality,
+} from "../recording/qualityPreference";
+import {
 	attachNativeCaptureLifecycle,
 	finalizeStoredVideo,
 	muxNativeMacRecordingWithAudio,
@@ -449,6 +453,7 @@ export function registerRecordingHandlers(
 					const recordingsDir = await getRecordingsDir();
 					const prefs = await recordingPreferencesReader.read();
 					const frameRate = resolveRecordingFrameRate(prefs.frameRate);
+					const quality = resolveRecordingQuality(prefs.quality);
 					const timestamp = Date.now();
 					const outputPath = path.join(recordingsDir, `recording-${timestamp}.mp4`);
 					tempVideoPath = path.join(
@@ -475,6 +480,7 @@ export function registerRecordingHandlers(
 					const config: Record<string, unknown> = {
 						outputPath: tempVideoPath,
 						fps: frameRate,
+						bitratePercent: qualityToBitratePercent(quality),
 					};
 
 					if (captureTarget.kind === "invalid-window") {

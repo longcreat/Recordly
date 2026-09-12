@@ -18,7 +18,8 @@ public:
     ~MFEncoder();
 
     bool initialize(const std::wstring& outputPath, int width, int height, int fps,
-                    ID3D11Device* device, ID3D11DeviceContext* context);
+                    ID3D11Device* device, ID3D11DeviceContext* context,
+                    int bitratePercent = 100);
     bool writeFrame(ID3D11Texture2D* texture, int64_t timestampHns);
     bool extendLastFrameTo(int64_t timestampHns);
     bool finalize();

@@ -78,3 +78,37 @@ describe("createRecordingPreferencesStore frameRate", () => {
 		expect(parsed.microphoneEnabled).toBe(true);
 	});
 });
+
+describe("createRecordingPreferencesStore quality", () => {
+	let tempRoot: string;
+	let settingsFile: string;
+
+	beforeEach(async () => {
+		tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "recordly-prefs-"));
+		settingsFile = path.join(tempRoot, "recordings-settings.json");
+	});
+
+	afterEach(async () => {
+		await fs.rm(tempRoot, { recursive: true, force: true });
+	});
+
+	it("round-trips quality through read/update", async () => {
+		const store = createRecordingPreferencesStore(settingsFile);
+		await store.update({ quality: "balanced" });
+		const parsed = await store.read();
+		expect(parsed.quality).toBe("balanced");
+	});
+
+	it("merges quality into existing preferences without wiping them", async () => {
+		await fs.writeFile(
+			settingsFile,
+			JSON.stringify({ microphoneEnabled: true, quality: "high" }, null, 2),
+			"utf-8",
+		);
+		const store = createRecordingPreferencesStore(settingsFile);
+		await store.update({ quality: "standard" });
+		const parsed = await store.read();
+		expect(parsed.quality).toBe("standard");
+		expect(parsed.microphoneEnabled).toBe(true);
+	});
+});

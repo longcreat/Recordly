@@ -39,7 +39,8 @@ MFEncoder::~MFEncoder() {
 }
 
 bool MFEncoder::initialize(const std::wstring& outputPath, int width, int height, int fps,
-                           ID3D11Device* device, ID3D11DeviceContext* context) {
+                           ID3D11Device* device, ID3D11DeviceContext* context,
+                           int bitratePercent) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (initialized_) return false;
@@ -73,7 +74,11 @@ bool MFEncoder::initialize(const std::wstring& outputPath, int width, int height
 
     outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
     outputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
-    const UINT32 videoBitrate = calculateScreenRecordingBitrate(width_, height_, fps_);
+    // Re-clamped here on purpose: defense in depth against any future caller
+    // that skips the config-level range check in main.cpp (10..200).
+    const UINT32 videoBitrate = static_cast<UINT32>(
+        static_cast<double>(calculateScreenRecordingBitrate(width_, height_, fps_)) *
+        (std::max)(10, (std::min)(bitratePercent, 200)) / 100.0 + 0.5);
     outputType->SetUINT32(MF_MT_AVG_BITRATE, videoBitrate);
     MFSetAttributeSize(outputType.Get(), MF_MT_FRAME_SIZE, width_, height_);
     MFSetAttributeRatio(outputType.Get(), MF_MT_FRAME_RATE, fps_, 1);

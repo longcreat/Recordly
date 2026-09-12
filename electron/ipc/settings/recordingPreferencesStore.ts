@@ -8,6 +8,7 @@ export interface RecordingPreferencesPatch {
 	webcamEnabled?: boolean;
 	webcamDeviceId?: string;
 	frameRate?: 24 | 30 | 60;
+	quality?: "standard" | "balanced" | "high";
 }
 
 export function createRecordingPreferencesStore(filePath: string) {

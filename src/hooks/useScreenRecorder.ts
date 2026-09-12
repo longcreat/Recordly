@@ -11,8 +11,13 @@ import {
 
 export type ScreenRecorderFrameRate = 24 | 30 | 60;
 
+export type ScreenRecorderQuality = "standard" | "balanced" | "high";
+
 const resolveFrameRate = (raw: unknown): ScreenRecorderFrameRate =>
 	raw === 24 || raw === 30 ? raw : 60;
+
+const resolveQuality = (raw: unknown): ScreenRecorderQuality =>
+	raw === "standard" || raw === "balanced" ? raw : "high";
 
 const TARGET_WIDTH = 3840;
 const TARGET_HEIGHT = 2160;
@@ -149,6 +154,8 @@ type UseScreenRecorderReturn = {
 	setSystemAudioEnabled: (enabled: boolean) => void;
 	frameRate: ScreenRecorderFrameRate;
 	persistFrameRate: (rate: ScreenRecorderFrameRate) => void;
+	quality: ScreenRecorderQuality;
+	persistQuality: (quality: ScreenRecorderQuality) => void;
 	webcamEnabled: boolean;
 	setWebcamEnabled: (enabled: boolean) => void;
 	webcamDeviceId: string | undefined;
@@ -394,6 +401,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [countdownDelay, setCountdownDelayState] = useState(3);
 	const [frameRate, setFrameRate] = useState<ScreenRecorderFrameRate>(60);
 	const frameRateRef = useRef<ScreenRecorderFrameRate>(60);
+	const [quality, setQuality] = useState<ScreenRecorderQuality>("high");
 	const mediaRecorder = useRef<MediaRecorder | null>(null);
 	const webcamRecorder = useRef<MediaRecorder | null>(null);
 	const stream = useRef<MediaStream | null>(null);
@@ -1546,6 +1554,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					setWebcamDeviceId(result.webcamDeviceId);
 				}
 				setFrameRate(resolveFrameRate(result.frameRate));
+				setQuality(resolveQuality(result.quality));
 			}
 		})();
 	}, []);
@@ -1568,6 +1577,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const persistFrameRate = useCallback((rate: ScreenRecorderFrameRate) => {
 		setFrameRate(rate);
 		void window.electronAPI.setRecordingPreferences({ frameRate: rate });
+	}, []);
+
+	const persistQuality = useCallback((nextQuality: ScreenRecorderQuality) => {
+		setQuality(nextQuality);
+		void window.electronAPI.setRecordingPreferences({ quality: nextQuality });
 	}, []);
 
 	useEffect(() => {
@@ -2463,6 +2477,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setSystemAudioEnabled: persistSystemAudioEnabled,
 		frameRate,
 		persistFrameRate,
+		quality,
+		persistQuality,
 		webcamEnabled,
 		setWebcamEnabled: persistWebcamEnabled,
 		webcamDeviceId,

@@ -896,6 +896,7 @@ interface Window {
 			webcamEnabled: boolean;
 			webcamDeviceId?: string;
 			frameRate: 24 | 30 | 60;
+			quality: "standard" | "balanced" | "high";
 		}>;
 		getRecordingAudioLabConfig: () => Promise<{
 			browserMicrophoneProfile: string;
@@ -908,6 +909,7 @@ interface Window {
 			webcamEnabled?: boolean;
 			webcamDeviceId?: string;
 			frameRate?: 24 | 30 | 60;
+			quality?: "standard" | "balanced" | "high";
 		}) => Promise<{ success: boolean; error?: string }>;
 		/** Countdown timer before recording */
 		getCountdownDelay: () => Promise<{ success: boolean; delay: number }>;

@@ -74,6 +74,8 @@ function LaunchWindowContent() {
 		setSystemAudioEnabled,
 		frameRate,
 		persistFrameRate,
+		quality,
+		persistQuality,
 		webcamEnabled,
 		setWebcamEnabled,
 		webcamDeviceId,
@@ -382,6 +384,8 @@ function LaunchWindowContent() {
 				recordingsDirectory={recordingsDirectory}
 				frameRate={frameRate}
 				persistFrameRate={persistFrameRate}
+				quality={quality}
+				persistQuality={persistQuality}
 				onToggleHudCaptureProtection={() => {
 					void toggleHudCaptureProtection();
 				}}

@@ -32,6 +32,7 @@ struct CaptureConfig {
     std::string micOutputPath;
     std::string micDeviceName;
     int fps = 60;
+    int bitratePercent = 100;
     int width = 0;
     int height = 0;
     int displayX = 0;
@@ -132,6 +133,12 @@ static bool parseSimpleJson(const std::string& json, CaptureConfig& config) {
 
     config.captureSystemAudio = findBool("captureSystemAudio");
     config.captureMic = findBool("captureMic");
+
+    int bitratePercent = findInt("bitratePercent");
+    // 10..200 must stay in sync with the encoder-side clamp in mf_encoder.cpp.
+    if (bitratePercent >= 10 && bitratePercent <= 200) {
+        config.bitratePercent = bitratePercent;
+    }
 
     int dx = findInt("displayX");
     int dy = findInt("displayY");
@@ -329,7 +336,7 @@ int main(int argc, char* argv[]) {
     MFEncoder encoder;
     std::wstring outputPathW = utf8ToWide(config.outputPath);
     if (!encoder.initialize(outputPathW, captureWidth, captureHeight, config.fps,
-                           session.device(), session.context())) {
+                           session.device(), session.context(), config.bitratePercent)) {
         std::cerr << "ERROR: Failed to initialize Media Foundation encoder" << std::endl;
         return 1;
     }

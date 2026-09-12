@@ -5,6 +5,7 @@ import { hideCursor } from "../../cursorHider";
 import { closeCountdownWindow, createCountdownWindow, getCountdownWindow } from "../../windows";
 import { COUNTDOWN_SETTINGS_FILE, RECORDINGS_SETTINGS_FILE, SHORTCUTS_FILE } from "../constants";
 import { resolveRecordingFrameRate } from "../recording/frameRatePreference";
+import { resolveRecordingQuality } from "../recording/qualityPreference";
 import {
 	createRecordingPreferencesStore,
 	type RecordingPreferencesPatch,
@@ -136,6 +137,7 @@ export function registerSettingsHandlers() {
 				webcamDeviceId:
 					typeof parsed.webcamDeviceId === "string" ? parsed.webcamDeviceId : undefined,
 				frameRate: resolveRecordingFrameRate(parsed.frameRate),
+				quality: resolveRecordingQuality(parsed.quality),
 			};
 		} catch {
 			return {
@@ -146,6 +148,7 @@ export function registerSettingsHandlers() {
 				webcamEnabled: false,
 				webcamDeviceId: undefined,
 				frameRate: 60,
+				quality: "high",
 			};
 		}
 	});

@@ -3,6 +3,7 @@ import {
 	EyeSlashIcon,
 	FilmSlateIcon,
 	FolderOpenIcon,
+	GaugeIcon,
 	TranslateIcon,
 	VideoCameraIcon,
 	ArrowClockwiseIcon,
@@ -15,7 +16,7 @@ import type { ReactElement } from "react";
 import { useI18n } from "@/contexts/I18nContext";
 import { useScopedT } from "@/contexts/I18nContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import type { ScreenRecorderFrameRate } from "@/hooks/useScreenRecorder";
+import type { ScreenRecorderFrameRate, ScreenRecorderQuality } from "@/hooks/useScreenRecorder";
 import type { AppLocale } from "@/i18n/config";
 import { SUPPORTED_LOCALES } from "@/i18n/config";
 import styles from "../LaunchWindow.module.css";
@@ -25,6 +26,12 @@ import { DropdownItem, HudPopover } from "./PopoverScaffold";
 const POPOVER_ID = "more";
 
 const RECORDING_FRAME_RATE_OPTIONS: readonly ScreenRecorderFrameRate[] = [24, 30, 60] as const;
+
+const RECORDING_QUALITY_OPTIONS: readonly ScreenRecorderQuality[] = [
+	"standard",
+	"balanced",
+	"high",
+] as const;
 
 const LOCALE_LABELS: Record<string, string> = {
 	en: "English",
@@ -45,6 +52,8 @@ export function MorePopover({
 	recordingsDirectory,
 	frameRate,
 	persistFrameRate,
+	quality,
+	persistQuality,
 	onToggleHudCaptureProtection,
 	onChooseRecordingsDirectory,
 	onOpenRecordingsFolder,
@@ -60,6 +69,8 @@ export function MorePopover({
 	recordingsDirectory?: string | null;
 	frameRate: ScreenRecorderFrameRate;
 	persistFrameRate: (rate: ScreenRecorderFrameRate) => void;
+	quality: ScreenRecorderQuality;
+	persistQuality: (quality: ScreenRecorderQuality) => void;
 	onToggleHudCaptureProtection: () => void;
 	onChooseRecordingsDirectory: () => void;
 	onOpenRecordingsFolder?: () => void;
@@ -180,6 +191,21 @@ export function MorePopover({
 					}}
 				>
 					{t(`recording.frameRate${rate}`)}
+				</DropdownItem>
+			))}
+			<div className={styles.ddLabel} style={{ marginTop: 4 }}>
+				{t("recording.quality")}
+			</div>
+			{RECORDING_QUALITY_OPTIONS.map((tier) => (
+				<DropdownItem
+					key={tier}
+					icon={<GaugeIcon size={16} />}
+					selected={quality === tier}
+					onClick={() => {
+						persistQuality(tier);
+					}}
+				>
+					{t(`recording.quality${tier.charAt(0).toUpperCase()}${tier.slice(1)}`)}
 				</DropdownItem>
 			))}
 			<div className={styles.ddLabel} style={{ marginTop: 4 }}>
