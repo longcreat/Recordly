@@ -41,7 +41,7 @@
   "publish": [
     {
       "provider": "github",
-      "owner": "webadderall",
+      "owner": "longcreat",
       "repo": "Recordly",
       "tagNamePrefix": "v",
       "publishAutoUpdate": true
