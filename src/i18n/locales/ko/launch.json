@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "영역",
+		"regionHint": "드래그하여 영역을 선택하고 Enter로 확인, Esc로 취소",
+		"regionTooSmall": "선택한 영역이 너무 작습니다",
 		"loadingSources": "소스를 불러오는 중...",
 		"screens": "화면",
 		"windows": "창",

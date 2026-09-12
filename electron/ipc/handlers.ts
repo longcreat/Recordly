@@ -56,12 +56,16 @@ export function registerIpcHandlers(
 	createSourceSelectorWindow: () => BrowserWindow,
 	_getMainWindow: () => BrowserWindow | null,
 	getSourceSelectorWindow: () => BrowserWindow | null,
+	createRegionPickerWindow: () => BrowserWindow,
+	getRegionPickerWindow: () => BrowserWindow | null,
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 ) {
 	registerSourceHandlers({
 		createEditorWindow,
 		createSourceSelectorWindow,
 		getSourceSelectorWindow,
+		createRegionPickerWindow,
+		getRegionPickerWindow,
 	});
 	registerRecordingHandlers(onRecordingStateChange);
 	registerPermissionHandlers();

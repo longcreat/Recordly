@@ -132,3 +132,86 @@ describe("resolveWindowsCaptureTarget", () => {
 		});
 	});
 });
+
+describe("region capture target", () => {
+	const displays = [
+		{ id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+		{ id: 2, bounds: { x: 1920, y: 0, width: 2560, height: 1440 }, scaleFactor: 2 },
+		{ id: 3, bounds: { x: -1920, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+	];
+
+	it("resolves a region on the requested display with DIP-to-physical conversion", () => {
+		const target = resolveWindowsCaptureTarget(
+			{
+				name: "Region",
+				display_id: "2",
+				sourceType: "region",
+				region: { x: 2020, y: 50, width: 400, height: 300 },
+			},
+			displays,
+			displays[0],
+		);
+		expect(target.kind).toBe("region");
+		if (target.kind !== "region") return;
+		expect(target.region).toEqual({ x: 200, y: 100, width: 800, height: 600 });
+	});
+
+	it("clamps an oversized region to display bounds", () => {
+		const target = resolveWindowsCaptureTarget(
+			{
+				name: "Region",
+				display_id: "1",
+				sourceType: "region",
+				region: { x: 1800, y: 1000, width: 500, height: 200 },
+			},
+			displays,
+			displays[0],
+		);
+		expect(target.kind).toBe("region");
+		if (target.kind !== "region") return;
+		expect(target.region.width).toBe(120);
+		expect(target.region.height).toBe(80);
+	});
+
+	it("resolves a region on a negative-origin display relative to that display", () => {
+		const target = resolveWindowsCaptureTarget(
+			{
+				name: "Region",
+				display_id: "3",
+				sourceType: "region",
+				region: { x: -1800, y: 100, width: 200, height: 150 },
+			},
+			displays,
+			displays[0],
+		);
+		expect(target.kind).toBe("region");
+		if (target.kind !== "region") return;
+		expect(target.region).toEqual({ x: 120, y: 100, width: 200, height: 150 });
+	});
+
+	it("treats a missing/invalid region as a full-display capture", () => {
+		const target = resolveWindowsCaptureTarget(
+			{ name: "Screen", display_id: "1", sourceType: "region" },
+			displays,
+			displays[0],
+		);
+		expect(target.kind).toBe("display");
+	});
+
+	it("falls back to a full-display capture for a degenerate 1x1 region", () => {
+		const target = resolveWindowsCaptureTarget(
+			{
+				name: "Region",
+				display_id: "1",
+				sourceType: "region",
+				region: { x: 500, y: 500, width: 1, height: 1 },
+			},
+			displays,
+			displays[0],
+		);
+		expect(target.kind).toBe("display");
+		if (target.kind !== "display") return;
+		expect(target.displayId).toBe(1);
+		expect(target.bounds).toEqual(displays[0].bounds);
+	});
+});

@@ -3,6 +3,7 @@ import { AnnouncementDialog } from "./components/announcements/AnnouncementDialo
 import { LiveAnnouncementNotifications } from "./components/announcements/LiveAnnouncementNotifications";
 import { CountdownOverlay } from "./components/countdown/CountdownOverlay";
 import { LaunchWindow } from "./components/launch/LaunchWindow";
+import RegionPickerWindow from "./components/launch/RegionPickerWindow";
 import { SourceSelector } from "./components/launch/SourceSelector";
 import { UpdateToastWindow } from "./components/launch/UpdateToastWindow";
 import { Toaster } from "./components/ui/sonner";
@@ -26,6 +27,7 @@ export default function App() {
 		if (
 			type === "hud-overlay" ||
 			type === "source-selector" ||
+			type === "region-picker" ||
 			type === "countdown" ||
 			type === "update-toast"
 		) {
@@ -67,6 +69,8 @@ export default function App() {
 			);
 		case "source-selector":
 			return <SourceSelector />;
+		case "region-picker":
+			return <RegionPickerWindow />;
 		case "countdown":
 			return <CountdownOverlay />;
 		case "update-toast":

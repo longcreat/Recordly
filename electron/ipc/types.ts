@@ -1,8 +1,11 @@
+export type SelectedSourceRegion = { x: number; y: number; width: number; height: number };
+
 export type SelectedSource = {
 	id?: string;
 	name: string;
 	display_id?: string;
-	sourceType?: "screen" | "window";
+	sourceType?: "screen" | "window" | "region";
+	region?: SelectedSourceRegion;
 	appName?: string;
 	windowTitle?: string;
 	[key: string]: unknown;
@@ -30,6 +33,7 @@ export type NativeCaptureDiagnostics = {
 	sourceType?: SelectedSource["sourceType"] | "unknown";
 	displayId?: number | null;
 	displayBounds?: WindowBounds | null;
+	region?: SelectedSourceRegion | null;
 	windowHandle?: number | null;
 	helperPath?: string | null;
 	outputPath?: string | null;

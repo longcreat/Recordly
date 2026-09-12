@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Bereich",
+		"regionHint": "Ziehen Sie einen Bereich auf, Enter bestätigt, Esc bricht ab",
+		"regionTooSmall": "Der ausgewählte Bereich ist zu klein",
 		"loadingSources": "Quellen werden geladen...",
 		"screens": "Bildschirme",
 		"windows": "Fenster",

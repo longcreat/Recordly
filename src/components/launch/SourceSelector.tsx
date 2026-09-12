@@ -1,5 +1,5 @@
 import * as React from "react";
-import { MonitorIcon, AppWindowIcon, CaretUpIcon } from "@phosphor-icons/react";
+import { MonitorIcon, AppWindowIcon, CaretUpIcon, CropIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,6 +86,30 @@ export const SourceSelectorContent = ({
 	"screenSources" | "windowSources" | "selectedSource" | "loading" | "onSourceSelect"
 >) => {
 	const t = useScopedT("launch");
+	const [showRegionEntry, setShowRegionEntry] = useState(false);
+
+	// The custom region entry is only offered where native Windows capture can
+	// record an arbitrary crop of a display.
+	useEffect(() => {
+		let cancelled = false;
+		void (async () => {
+			try {
+				const platform = await window.electronAPI?.getPlatform?.();
+				if (cancelled || platform !== "win32") return;
+				if (typeof window.electronAPI?.isNativeWindowsCaptureAvailable !== "function") return;
+				const result = await window.electronAPI.isNativeWindowsCaptureAvailable();
+				if (!cancelled && result?.available) {
+					setShowRegionEntry(true);
+				}
+			} catch {
+				// Keep the region entry hidden when availability cannot be determined.
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	const renderSourceItem = (source: DesktopSource, index: number) => {
 		const isSelected = selectedSource === source.name;
 		return (
@@ -185,6 +209,29 @@ export const SourceSelectorContent = ({
 					{t("recording.noSourcesFound")}
 				</div>
 			)}
+			{showRegionEntry ? (
+				<button
+					type="button"
+					className="source-selector-item group mt-1 min-h-[46px] w-full rounded-[11px] px-3 py-2.5 text-left font-medium flex items-center justify-start gap-3"
+					onClick={() => {
+						void window.electronAPI?.openRegionPicker?.();
+					}}
+				>
+					<div className="relative flex-shrink-0">
+						<div className="source-selector-thumb-fallback w-12 h-8 rounded-[8px] flex items-center justify-center">
+							<CropIcon className="w-5 h-5 source-selector-muted" />
+						</div>
+					</div>
+					<div className="flex-1 min-w-0 flex flex-col items-start text-left">
+						<div className="text-sm font-medium source-selector-text w-full">
+							<MarqueeText text={t("sourceSelector.region")} />
+						</div>
+						<div className="text-xs source-selector-subtle truncate w-full text-left">
+							{t("sourceSelector.regionHint")}
+						</div>
+					</div>
+				</button>
+			) : null}
 		</div>
 	);
 };

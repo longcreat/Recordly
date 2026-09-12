@@ -226,7 +226,11 @@ export function resolveBrowserCaptureCursorPolicy({
 export function shouldUseNativeWindowsCaptureForSource(
 	source: Pick<ProcessedDesktopSource, "id"> | null | undefined,
 ): boolean {
-	return source?.id?.startsWith("screen:") === true || source?.id?.startsWith("window:") === true;
+	return (
+		source?.id?.startsWith("screen:") === true ||
+		source?.id?.startsWith("window:") === true ||
+		source?.id?.startsWith("region:") === true
+	);
 }
 
 export function createProcessedMicrophoneConstraints(
@@ -704,7 +708,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	);
 
 	const resolveBrowserCaptureSource = useCallback(async (source: ProcessedDesktopSource) => {
-		if (!source?.id?.startsWith("screen:")) {
+		// Region sources have no browser-capturable surface of their own; fall back
+		// to the underlying display via the display_id lookup below.
+		if (!source?.id?.startsWith("screen:") && !source?.id?.startsWith("region:")) {
 			return source;
 		}
 
@@ -743,6 +749,12 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					id: displayMatch.id,
 					name: displayMatch.name ?? source.name,
 					display_id: displayMatch.display_id ?? source.display_id,
+					// Region sources are remapped to their underlying display for
+					// browser capture (the browser cannot crop); normalize the shape
+					// so downstream consumers see a consistent screen source.
+					...(source.id.startsWith("region:")
+						? { sourceType: "screen" as const, region: undefined }
+						: {}),
 				};
 			}
 		} catch (error) {

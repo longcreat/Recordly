@@ -485,6 +485,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openSourceSelector: () => {
 		return ipcRenderer.invoke("open-source-selector");
 	},
+	openRegionPicker: () => {
+		return ipcRenderer.invoke("open-region-picker");
+	},
+	getRegionPickerDisplay: () => {
+		return ipcRenderer.invoke("get-region-picker-display");
+	},
+	cancelRegionPicker: () => {
+		return ipcRenderer.invoke("cancel-region-picker");
+	},
 	selectSource: (source: ProcessedDesktopSource) => {
 		return ipcRenderer.invoke("select-source", source);
 	},

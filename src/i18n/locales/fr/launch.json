@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Région",
+		"regionHint": "Tracez une zone, Entrée pour confirmer, Échap pour annuler",
+		"regionTooSmall": "La zone sélectionnée est trop petite",
 		"loadingSources": "Chargement des sources...",
 		"screens": "Écrans",
 		"windows": "Fenêtres",

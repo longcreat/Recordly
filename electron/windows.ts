@@ -1079,6 +1079,83 @@ export function createSourceSelectorWindow(): BrowserWindow {
 	return win;
 }
 
+export function createRegionPickerWindow(): BrowserWindow {
+	const cursorPoint = getScreen().getCursorScreenPoint();
+	const screen = getScreen();
+	const display = screen.getDisplayMatching({
+		x: cursorPoint.x,
+		y: cursorPoint.y,
+		width: 1,
+		height: 1,
+	});
+	const win = new BrowserWindow({
+		x: display.bounds.x,
+		y: display.bounds.y,
+		width: display.bounds.width,
+		height: display.bounds.height,
+		frame: false,
+		resizable: false,
+		movable: false,
+		alwaysOnTop: true,
+		transparent: true,
+		skipTaskbar: true,
+		show: false,
+		...(process.platform !== "darwin" && { icon: WINDOW_ICON_PATH }),
+		backgroundColor: "#00000000",
+		// Mirrors the HUD overlay: transparent frameless overlays must not render
+		// a native shadow, and fullscreen:true breaks transparency on Windows.
+		hasShadow: false,
+		webPreferences: {
+			preload: path.join(electronWindowsDir, "preload.mjs"),
+			nodeIntegration: false,
+			contextIsolation: true,
+		},
+	});
+	// Keep the picker above normal and full-screen apps, like the HUD overlay.
+	win.setAlwaysOnTop(true, "screen-saver");
+
+	// The picker spans exactly one display; if that display is disconnected,
+	// a leftover fullscreen overlay would be unusable, so close it.
+	const handleDisplayRemoved = () => {
+		if (win.isDestroyed()) {
+			return;
+		}
+		const bounds = win.getBounds();
+		const displayStillExists = screen.getAllDisplays().some(
+			(candidate) =>
+				bounds.x >= candidate.bounds.x &&
+				bounds.x < candidate.bounds.x + candidate.bounds.width &&
+				bounds.y >= candidate.bounds.y &&
+				bounds.y < candidate.bounds.y + candidate.bounds.height,
+		);
+		if (!displayStillExists) {
+			win.close();
+		}
+	};
+	screen.on("display-removed", handleDisplayRemoved);
+	win.on("closed", () => {
+		screen.removeListener("display-removed", handleDisplayRemoved);
+	});
+
+	win.webContents.on("did-finish-load", () => {
+		setTimeout(() => {
+			if (!win.isDestroyed()) {
+				win.show();
+			}
+		}, 100);
+	});
+
+	if (VITE_DEV_SERVER_URL) {
+		win.loadURL(`${VITE_DEV_SERVER_URL}?windowType=region-picker`);
+	} else {
+		win.loadFile(path.join(RENDERER_DIST, "index.html"), {
+			query: { windowType: "region-picker" },
+		});
+	}
+
+	return win;
+}
+
 export function createCountdownWindow(): BrowserWindow {
 	const primaryDisplay = getScreen().getPrimaryDisplay();
 	const { width, height } = primaryDisplay.workAreaSize;

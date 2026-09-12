@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Region",
+		"regionHint": "Drag to select an area, Enter to confirm, Esc to cancel",
+		"regionTooSmall": "Selected area is too small",
 		"loadingSources": "Loading sources...",
 		"screens": "Screens",
 		"windows": "Windows",

@@ -40,10 +40,14 @@ export function registerSourceHandlers({
 	createEditorWindow,
 	createSourceSelectorWindow,
 	getSourceSelectorWindow,
+	createRegionPickerWindow,
+	getRegionPickerWindow,
 }: {
 	createEditorWindow: () => void;
 	createSourceSelectorWindow: () => BrowserWindow;
 	getSourceSelectorWindow: () => BrowserWindow | null;
+	createRegionPickerWindow: () => BrowserWindow;
+	getRegionPickerWindow: () => BrowserWindow | null;
 }) {
 	ipcMain.handle("get-sources", async (_, opts) => {
 		const cacheKey = JSON.stringify({
@@ -314,6 +318,10 @@ export function registerSourceHandlers({
 		if (sourceSelectorWin) {
 			sourceSelectorWin.close();
 		}
+		const regionPickerWin = getRegionPickerWindow();
+		if (regionPickerWin) {
+			regionPickerWin.close();
+		}
 		return selectedSource;
 	});
 
@@ -532,6 +540,41 @@ body{background:transparent;overflow:hidden;width:100vw;height:100vh}
 			return;
 		}
 		createSourceSelectorWindow();
+	});
+
+	ipcMain.handle("open-region-picker", () => {
+		const regionPickerWin = getRegionPickerWindow();
+		if (regionPickerWin && !regionPickerWin.isDestroyed()) {
+			regionPickerWin.focus();
+			return;
+		}
+		createRegionPickerWindow();
+	});
+
+	ipcMain.handle("get-region-picker-display", () => {
+		const regionPickerWin = getRegionPickerWindow();
+		if (!regionPickerWin || regionPickerWin.isDestroyed()) {
+			return { success: false as const };
+		}
+		const display = getScreen().getDisplayMatching(regionPickerWin.getBounds());
+		return {
+			success: true as const,
+			display: {
+				id: display.id,
+				x: display.bounds.x,
+				y: display.bounds.y,
+				width: display.bounds.width,
+				height: display.bounds.height,
+				scaleFactor: display.scaleFactor,
+			},
+		};
+	});
+
+	ipcMain.handle("cancel-region-picker", () => {
+		const regionPickerWin = getRegionPickerWindow();
+		if (regionPickerWin && !regionPickerWin.isDestroyed()) {
+			regionPickerWin.close();
+		}
 	});
 	ipcMain.handle("switch-to-editor", () => {
 		console.log("[switch-to-editor] Opening editor window");

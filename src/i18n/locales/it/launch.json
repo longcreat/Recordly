@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Area",
+		"regionHint": "Trascina per selezionare un'area, Invio per confermare, Esc per annullare",
+		"regionTooSmall": "L'area selezionata è troppo piccola",
 		"loadingSources": "Caricamento sorgenti...",
 		"screens": "Schermi",
 		"windows": "Finestre",

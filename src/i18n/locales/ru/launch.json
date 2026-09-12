@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Область",
+		"regionHint": "Выделите область мышью, Enter — подтвердить, Esc — отмена",
+		"regionTooSmall": "Выбранная область слишком мала",
 		"loadingSources": "Загрузка источников...",
 		"screens": "Экраны",
 		"windows": "Окна",

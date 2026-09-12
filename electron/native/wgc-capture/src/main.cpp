@@ -33,6 +33,11 @@ struct CaptureConfig {
     std::string micDeviceName;
     int fps = 60;
     int bitratePercent = 100;
+    int cropX = -1;
+    int cropY = -1;
+    int cropW = 0;
+    int cropH = 0;
+    bool hasCrop = false;
     int width = 0;
     int height = 0;
     int displayX = 0;
@@ -138,6 +143,18 @@ static bool parseSimpleJson(const std::string& json, CaptureConfig& config) {
     // 10..200 must stay in sync with the encoder-side clamp in mf_encoder.cpp.
     if (bitratePercent >= 10 && bitratePercent <= 200) {
         config.bitratePercent = bitratePercent;
+    }
+
+    int cw = findInt("cropW");
+    int ch = findInt("cropH");
+    int cx = findInt("cropX");
+    int cy = findInt("cropY");
+    if (cw > 0 && ch > 0 && cx >= 0 && cy >= 0) {
+        config.cropX = cx;
+        config.cropY = cy;
+        config.cropW = cw;
+        config.cropH = ch;
+        config.hasCrop = true;
     }
 
     int dx = findInt("displayX");
@@ -325,8 +342,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    int captureWidth = config.width > 0 ? config.width : session.captureWidth();
-    int captureHeight = config.height > 0 ? config.height : session.captureHeight();
+    int captureWidth = config.hasCrop
+        ? config.cropW
+        : (config.width > 0 ? config.width : session.captureWidth());
+    int captureHeight = config.hasCrop
+        ? config.cropH
+        : (config.height > 0 ? config.height : session.captureHeight());
 
     // Ensure even dimensions for H.264
     captureWidth = (captureWidth / 2) * 2;
@@ -336,7 +357,10 @@ int main(int argc, char* argv[]) {
     MFEncoder encoder;
     std::wstring outputPathW = utf8ToWide(config.outputPath);
     if (!encoder.initialize(outputPathW, captureWidth, captureHeight, config.fps,
-                           session.device(), session.context(), config.bitratePercent)) {
+                           session.device(), session.context(),
+                           config.bitratePercent,
+                           config.hasCrop ? config.cropX : 0,
+                           config.hasCrop ? config.cropY : 0)) {
         std::cerr << "ERROR: Failed to initialize Media Foundation encoder" << std::endl;
         return 1;
     }

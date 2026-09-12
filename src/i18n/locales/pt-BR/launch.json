@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Região",
+		"regionHint": "Arraste para selecionar uma área, Enter para confirmar, Esc para cancelar",
+		"regionTooSmall": "A área selecionada é muito pequena",
 		"loadingSources": "Carregando fontes...",
 		"screens": "Telas",
 		"windows": "Janelas",

@@ -40,7 +40,7 @@ MFEncoder::~MFEncoder() {
 
 bool MFEncoder::initialize(const std::wstring& outputPath, int width, int height, int fps,
                            ID3D11Device* device, ID3D11DeviceContext* context,
-                           int bitratePercent) {
+                           int bitratePercent, int cropLeft, int cropTop) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (initialized_) return false;
@@ -57,6 +57,8 @@ bool MFEncoder::initialize(const std::wstring& outputPath, int width, int height
 
     width_ = width;
     height_ = height;
+    cropLeft_ = cropLeft > 0 ? cropLeft : 0;
+    cropTop_ = cropTop > 0 ? cropTop : 0;
     fps_ = fps;
     device_ = device;
     context_ = context;
@@ -196,8 +198,11 @@ bool MFEncoder::writeFrame(ID3D11Texture2D* texture, int64_t timestampHns) {
     D3D11_TEXTURE2D_DESC sourceDesc = {};
     texture->GetDesc(&sourceDesc);
 
+    // Fast path only applies when no crop offset is requested; otherwise the
+    // crop region must be copied out of the full-size source below.
     if (sourceDesc.Width == static_cast<UINT>(width_) &&
-        sourceDesc.Height == static_cast<UINT>(height_)) {
+        sourceDesc.Height == static_cast<UINT>(height_) &&
+        cropLeft_ == 0 && cropTop_ == 0) {
         context_->CopyResource(stagingTexture_.Get(), texture);
     } else {
         if (!resizeCompositeTexture_ || !resizeCompositeView_) return false;
@@ -206,14 +211,14 @@ bool MFEncoder::writeFrame(ID3D11Texture2D* texture, int64_t timestampHns) {
         context_->ClearRenderTargetView(resizeCompositeView_.Get(), clearColor);
 
         D3D11_BOX sourceBox = {};
-        sourceBox.left = 0;
-        sourceBox.top = 0;
+        sourceBox.left = static_cast<UINT>(cropLeft_);
+        sourceBox.top = static_cast<UINT>(cropTop_);
         sourceBox.front = 0;
-        sourceBox.right = (std::min)(sourceDesc.Width, static_cast<UINT>(width_));
-        sourceBox.bottom = (std::min)(sourceDesc.Height, static_cast<UINT>(height_));
+        sourceBox.right = (std::min)(sourceDesc.Width, static_cast<UINT>(cropLeft_ + width_));
+        sourceBox.bottom = (std::min)(sourceDesc.Height, static_cast<UINT>(cropTop_ + height_));
         sourceBox.back = 1;
 
-        if (sourceBox.right == 0 || sourceBox.bottom == 0) return false;
+        if (sourceBox.right <= sourceBox.left || sourceBox.bottom <= sourceBox.top) return false;
 
         context_->CopySubresourceRegion(
             resizeCompositeTexture_.Get(),

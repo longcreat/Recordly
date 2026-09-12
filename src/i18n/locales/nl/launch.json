@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "Gebied",
+		"regionHint": "Sleep om een gebied te selecteren, Enter om te bevestigen, Esc om te annuleren",
+		"regionTooSmall": "Het geselecteerde gebied is te klein",
 		"loadingSources": "Bronnen laden...",
 		"screens": "Schermen",
 		"windows": "Vensters",

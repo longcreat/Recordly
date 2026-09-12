@@ -474,7 +474,9 @@ export function registerRecordingHandlers(
 						getScreen().getPrimaryDisplay(),
 					);
 					const displayBounds =
-						captureTarget.kind === "display" ? captureTarget.bounds : null;
+						captureTarget.kind === "display" || captureTarget.kind === "region"
+							? captureTarget.bounds
+							: null;
 					setWindowsOrphanedMicAudioPath(null);
 
 					const config: Record<string, unknown> = {
@@ -526,6 +528,13 @@ export function registerRecordingHandlers(
 						}
 					}
 
+					if (captureTarget.kind === "region") {
+						config.cropX = captureTarget.region.x;
+						config.cropY = captureTarget.region.y;
+						config.cropW = captureTarget.region.width;
+						config.cropH = captureTarget.region.height;
+					}
+
 					if (options?.capturesSystemAudio) {
 						systemAudioPath = path.join(
 							recordingsDir,
@@ -568,6 +577,7 @@ export function registerRecordingHandlers(
 						sourceType: source?.sourceType ?? "unknown",
 						displayId: typeof config.displayId === "number" ? config.displayId : null,
 						displayBounds,
+						region: captureTarget.kind === "region" ? captureTarget.region : null,
 						windowHandle:
 							typeof config.windowHandle === "number" ? config.windowHandle : null,
 						helperPath: exePath,
@@ -622,6 +632,7 @@ export function registerRecordingHandlers(
 						sourceType: source?.sourceType ?? "unknown",
 						displayId: typeof config.displayId === "number" ? config.displayId : null,
 						displayBounds,
+						region: captureTarget.kind === "region" ? captureTarget.region : null,
 						windowHandle:
 							typeof config.windowHandle === "number" ? config.windowHandle : null,
 						helperPath: exePath,

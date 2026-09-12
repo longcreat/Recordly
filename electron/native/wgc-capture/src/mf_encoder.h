@@ -19,7 +19,7 @@ public:
 
     bool initialize(const std::wstring& outputPath, int width, int height, int fps,
                     ID3D11Device* device, ID3D11DeviceContext* context,
-                    int bitratePercent = 100);
+                    int bitratePercent = 100, int cropLeft = 0, int cropTop = 0);
     bool writeFrame(ID3D11Texture2D* texture, int64_t timestampHns);
     bool extendLastFrameTo(int64_t timestampHns);
     bool finalize();
@@ -41,6 +41,8 @@ private:
     DWORD streamIndex_ = 0;
     int width_ = 0;
     int height_ = 0;
+    int cropLeft_ = 0;
+    int cropTop_ = 0;
     int fps_ = 60;
     int64_t firstSampleTimeHns_ = -1;
     int64_t lastSampleTimeHns_ = -1;

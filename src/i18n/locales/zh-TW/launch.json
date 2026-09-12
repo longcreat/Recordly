@@ -67,6 +67,9 @@
 		}
 	},
 	"sourceSelector": {
+		"region": "區域",
+		"regionHint": "拖曳框選區域，Enter 確認，Esc 取消",
+		"regionTooSmall": "所選區域太小",
 		"loadingSources": "正在載入來源...",
 		"screens": "螢幕",
 		"windows": "視窗",

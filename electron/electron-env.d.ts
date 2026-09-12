@@ -216,6 +216,19 @@ interface Window {
 		getSources: (opts: Electron.SourcesOptions) => Promise<ProcessedDesktopSource[]>;
 		switchToEditor: () => Promise<void>;
 		openSourceSelector: () => Promise<void>;
+		openRegionPicker: () => Promise<void>;
+		getRegionPickerDisplay: () => Promise<{
+			success: boolean;
+			display?: {
+				id: number;
+				x: number;
+				y: number;
+				width: number;
+				height: number;
+				scaleFactor: number;
+			};
+		}>;
+		cancelRegionPicker: () => Promise<void>;
 		selectSource: (source: ProcessedDesktopSource) => Promise<ProcessedDesktopSource>;
 		showSourceHighlight: (source: ProcessedDesktopSource) => Promise<{ success: boolean }>;
 		getSelectedSource: () => Promise<ProcessedDesktopSource | null>;
@@ -928,7 +941,8 @@ interface ProcessedDesktopSource {
 	thumbnail: string | null;
 	appIcon: string | null;
 	originalName?: string;
-	sourceType?: "screen" | "window";
+	sourceType?: "screen" | "window" | "region";
+	region?: { x: number; y: number; width: number; height: number };
 	appName?: string;
 	windowTitle?: string;
 }

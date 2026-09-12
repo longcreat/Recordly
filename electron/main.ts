@@ -49,6 +49,7 @@ import {
 import {
 	createEditorWindow,
 	createHudOverlayWindow,
+	createRegionPickerWindow,
 	createSourceSelectorWindow,
 	getHudOverlayWindow,
 	getUpdateToastWindow,
@@ -173,6 +174,7 @@ function isHudWebContents(webContents: Electron.WebContents | null): boolean {
 // Window references
 let mainWindow: BrowserWindow | null = null;
 let sourceSelectorWindow: BrowserWindow | null = null;
+let regionPickerWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayContextMenu: Menu | null = null;
 let selectedSourceName = "";
@@ -863,6 +865,14 @@ function createSourceSelectorWindowWrapper() {
 	return sourceSelectorWindow;
 }
 
+function createRegionPickerWindowWrapper() {
+	regionPickerWindow = createRegionPickerWindow();
+	regionPickerWindow.on("closed", () => {
+		regionPickerWindow = null;
+	});
+	return regionPickerWindow;
+}
+
 // On macOS, applications and their menu bar stay active until the user quits
 // explicitly with Cmd + Q.
 app.on("before-quit", () => {
@@ -1010,6 +1020,8 @@ app.whenReady().then(async () => {
 		createSourceSelectorWindowWrapper,
 		() => mainWindow,
 		() => sourceSelectorWindow,
+		createRegionPickerWindowWrapper,
+		() => regionPickerWindow,
 		(recording: boolean, sourceName: string) => {
 			selectedSourceName = sourceName;
 			setHudOverlayRecordingActive(recording);

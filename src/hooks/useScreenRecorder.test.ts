@@ -169,6 +169,10 @@ describe("shouldUseNativeWindowsCaptureForSource", () => {
 		expect(shouldUseNativeWindowsCaptureForSource({ id: "window:123456:0" })).toBe(true);
 	});
 
+	it("keeps native Windows capture on region sources", () => {
+		expect(shouldUseNativeWindowsCaptureForSource({ id: "region:101" })).toBe(true);
+	});
+
 	it("keeps browser capture for non-desktop sources", () => {
 		expect(shouldUseNativeWindowsCaptureForSource({ id: "browser-tab:abc" })).toBe(false);
 	});
