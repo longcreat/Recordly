@@ -86,6 +86,10 @@ import {
 	type ZoomRegion,
 	type ZoomTransitionEasing,
 } from "./types";
+import {
+	isAnnotationActiveAtTime,
+	shouldClearSelectedAnnotation,
+} from "./videoPlayback/annotationVisibility";
 import { DEFAULT_FOCUS } from "./videoPlayback/constants";
 import {
 	type CursorFollowCameraState,
@@ -1253,6 +1257,22 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		useEffect(() => {
 			selectedZoomIdRef.current = selectedZoomId;
 		}, [selectedZoomId]);
+
+		useEffect(() => {
+			if (!selectedAnnotationId || !onSelectAnnotation) {
+				return;
+			}
+
+			if (
+				shouldClearSelectedAnnotation(
+					annotationRegions ?? [],
+					selectedAnnotationId,
+					Math.round(currentTime * 1000),
+				)
+			) {
+				onSelectAnnotation(null);
+			}
+		}, [annotationRegions, currentTime, onSelectAnnotation, selectedAnnotationId]);
 
 		useEffect(() => {
 			isPlayingRef.current = isPlaying;
@@ -2802,20 +2822,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								}}
 							>
 								{(() => {
+									const timeMs = Math.round(currentTime * 1000);
 									const filtered = (annotationRegions || []).filter(
-										(annotation) => {
-											if (
-												typeof annotation.startMs !== "number" ||
-												typeof annotation.endMs !== "number"
-											)
-												return false;
-
-											const timeMs = Math.round(currentTime * 1000);
-											return (
-												timeMs >= annotation.startMs &&
-												timeMs <= annotation.endMs
-											);
-										},
+										(annotation) =>
+											isAnnotationActiveAtTime(annotation, timeMs),
 									);
 
 									const sorted = [...filtered].sort(
