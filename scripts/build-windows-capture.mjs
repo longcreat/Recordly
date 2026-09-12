@@ -57,6 +57,46 @@ function findCmake() {
 		}
 	}
 
+	// Visual Studio instances in arbitrary install locations, via vswhere.
+	// The scan below only knows the standard C:\ roots, so a VS installed on
+	// another drive (or edition layout) would be missed without this.
+	const vswherePath = path.join(
+		"C:",
+		"Program Files (x86)",
+		"Microsoft Visual Studio",
+		"Installer",
+		"vswhere.exe",
+	);
+	if (existsSync(vswherePath)) {
+		try {
+			const installationPaths = execSync(
+				`"${vswherePath}" -products * -property installationPath`,
+				{ stdio: "pipe", encoding: "utf-8" },
+			)
+				.split(/\r?\n/)
+				.map((line) => line.trim())
+				.filter(Boolean);
+			for (const installationPath of installationPaths) {
+				const cmakePath = path.join(
+					installationPath,
+					"Common7",
+					"IDE",
+					"CommonExtensions",
+					"Microsoft",
+					"CMake",
+					"CMake",
+					"bin",
+					"cmake.exe",
+				);
+				if (existsSync(cmakePath)) {
+					return `"${cmakePath}"`;
+				}
+			}
+		} catch {
+			// vswhere unavailable or failed — fall back to the standard-root scan below
+		}
+	}
+
 	// VS 2022 bundled CMake
 	const vsRoots = [
 		path.join("C:", "Program Files", "Microsoft Visual Studio"),
@@ -112,6 +152,8 @@ if (!cmake) {
 	);
 	process.exit(1);
 }
+
+console.log(`[build-windows-capture] Using CMake: ${cmake}`);
 
 mkdirSync(buildDir, { recursive: true });
 const cacheFile = path.join(buildDir, "CMakeCache.txt");
