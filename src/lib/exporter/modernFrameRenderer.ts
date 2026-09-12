@@ -3339,6 +3339,7 @@ export class FrameRenderer {
 		}
 	}
 
+	/** Advance the export camera from the shared scene target at this media time. */
 	private updateAnimationState(timeMs: number): number {
 		if (!this.cameraContainer || !this.layoutCache) {
 			return 0;

@@ -15,6 +15,7 @@ import {
 } from "@/components/video-editor/types";
 import { drawSquircleOnCanvas } from "@/lib/geometry/squircle";
 
+/** Draw the active caption using the same typography and timing as preview. */
 export function renderCaptions(
 	ctx: CanvasRenderingContext2D,
 	cues: CaptionCue[],

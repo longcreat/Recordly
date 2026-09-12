@@ -2262,6 +2262,7 @@ export class ModernVideoExporter {
 		);
 	}
 
+	/** Build deterministic per-frame camera transforms for native compositors. */
 	private getNativeStaticLayoutZoomTelemetry(
 		layout: ReturnType<typeof computePaddedLayout>,
 		totalFrames: number,

@@ -1252,6 +1252,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 		useEffect(() => {
 			zoomRegionsRef.current = zoomRegions;
+			if (!isPlayingRef.current) {
+				shouldSnapPausedFrameRef.current = true;
+			}
 		}, [zoomRegions]);
 
 		useEffect(() => {

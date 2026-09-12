@@ -40,6 +40,7 @@ function clampPercent(value: number) {
 	return Math.min(100, Math.max(0, value));
 }
 
+/** Render an annotation in preview space with editor drag and resize controls. */
 export function AnnotationOverlay({
 	annotation,
 	isSelected,

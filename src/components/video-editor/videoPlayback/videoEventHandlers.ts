@@ -27,6 +27,10 @@ interface VideoEventHandlersParams {
 	speedRegionsRef: React.MutableRefObject<SpeedRegion[]>;
 }
 
+/**
+ * Bind media events to the preview's presented-frame clock while honoring trim
+ * and speed regions.
+ */
 export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	const {
 		video,
