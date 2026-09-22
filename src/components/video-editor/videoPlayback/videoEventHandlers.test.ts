@@ -196,4 +196,53 @@ describe("createVideoEventHandlers", () => {
 		expect(onTimeUpdate).toHaveBeenLastCalledWith(2);
 		expect(shouldSnapPausedFrameRef.current).toBe(true);
 	});
+
+	it("skips a non-frame-aligned cut region exactly once instead of re-seeking forever", () => {
+		// A split at an arbitrary playhead rarely lands on a whole frame, so the cut
+		// region ends at e.g. 2017ms. Seeking there makes the browser quantize the
+		// position down to the nearest presented frame (2000ms at 30fps), which is
+		// still "< endMs" — without a guard the handler seeks again on every seeked
+		// event and playback freezes at the boundary while still reporting playing.
+		const fps = 30;
+		let requested = 1.5; // playhead currently inside the gap [1000, 2017]
+		let seekCount = 0;
+		let rafCallback: FrameRequestCallback | null = null;
+		requestAnimationFrameMock.mockImplementation((callback: FrameRequestCallback) => {
+			rafCallback = callback;
+			return 31;
+		});
+
+		const video = createMockVideo({ duration: 5, paused: false });
+		Object.defineProperty(video, "currentTime", {
+			configurable: true,
+			get: () => Math.floor(requested * fps) / fps,
+			set: (value: number) => {
+				requested = value;
+				seekCount += 1;
+			},
+		});
+
+		const handlers = createVideoEventHandlers({
+			video,
+			isSeekingRef: createMutableRef(false),
+			isPlayingRef: createMutableRef(false),
+			allowPlaybackRef: createMutableRef(true),
+			currentTimeRef: createMutableRef(0),
+			timeUpdateAnimationRef: createMutableRef<number | null>(null),
+			onPlayStateChange: vi.fn(),
+			onTimeUpdate: vi.fn(),
+			trimRegionsRef: createMutableRef([{ id: "trim-1", startMs: 1000, endMs: 2017 }]),
+			speedRegionsRef: createMutableRef([]),
+		});
+
+		handlers.handlePlay();
+		rafCallback?.(0); // playback reaches the gap → first skip toward 2.017s
+		expect(seekCount).toBe(1);
+
+		// Browser completes that seek, quantizing currentTime to 2.0s (< 2017ms end).
+		handlers.handleSeeked();
+
+		// Must recognize arrival at the next clip and not issue another seek.
+		expect(seekCount).toBe(1);
+	});
 });

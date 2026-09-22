@@ -47,6 +47,12 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	} = params;
 	const presentedFrameVideo = video as PresentedFrameVideoElement;
 	let videoFrameRequestId: number | null = null;
+	// The browser quantizes a seek to whole frames, so seeking to a cut region's
+	// end can land a hair before it and still read as "inside" the region. Track
+	// the region we just jumped so we don't re-seek it on the resulting seeked
+	// event; a user-initiated scrub re-arms the skip.
+	let pendingSkipTrimId: string | null = null;
+	let programmaticSeekInFlight = false;
 	enablePitchPreservingPlayback(video);
 
 	const emitTime = (timeValue: number) => {
@@ -57,11 +63,15 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	// Helper function to check if current time is within a trim region
 	const findActiveTrimRegion = (currentTimeMs: number): TrimRegion | null => {
 		const trimRegions = trimRegionsRef.current;
-		return (
+		const region =
 			trimRegions.find(
 				(region) => currentTimeMs >= region.startMs && currentTimeMs < region.endMs,
-			) || null
-		);
+			) || null;
+		// Already jumped this region; a sub-frame undershoot must not re-trigger.
+		if (region && region.id === pendingSkipTrimId) {
+			return null;
+		}
+		return region;
 	};
 
 	// Helper function to find the active speed region at the current time
@@ -77,6 +87,8 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		const skipToTime = trimRegion.endMs / 1000;
 		const clampedSkipToTime = Math.min(skipToTime, video.duration);
 
+		pendingSkipTrimId = trimRegion.id;
+		programmaticSeekInFlight = true;
 		video.currentTime = clampedSkipToTime;
 		emitTime(clampedSkipToTime);
 
@@ -170,6 +182,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 	const handleSeeked = () => {
 		isSeekingRef.current = false;
+		programmaticSeekInFlight = false;
 
 		const currentTimeMs = video.currentTime * 1000;
 		const activeTrimRegion = findActiveTrimRegion(currentTimeMs);
@@ -184,6 +197,11 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 	const handleSeeking = () => {
 		isSeekingRef.current = true;
+		// A user scrub (not our own skip) re-arms gap skipping so dragging back
+		// into a removed region jumps past it again.
+		if (!programmaticSeekInFlight) {
+			pendingSkipTrimId = null;
+		}
 		if (shouldSnapPausedFrameRef) {
 			shouldSnapPausedFrameRef.current = true;
 		}
